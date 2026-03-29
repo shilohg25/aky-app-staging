@@ -304,6 +304,9 @@ el.generateSoaBtn.addEventListener("click", generateSoa);
     el.saveAccountBtn.addEventListener("click", saveAccount);
     el.closeResetPasswordModalBtn.addEventListener("click", () => closeModal(el.resetPasswordModal));
     el.saveResetPasswordBtn.addEventListener("click", saveResetPassword);
+    document.querySelectorAll("#logView .sortable-th").forEach((th) => {
+  th.addEventListener("click", () => toggleLogSort(th.dataset.sort));
+});
 
     document.querySelectorAll(".modal").forEach((modal) => {
       modal.addEventListener("click", (e) => {
@@ -1730,29 +1733,76 @@ function renderSoaPaymentRangeVisibility() {
     closeModal(el.soaModal);
     openPrintWindow(html);
   }
+function toggleLogSort(field) {
+  if (!field) return;
 
-  function renderLogs() {
-    if (!canViewLogs()) return;
-    el.logTableBody.innerHTML = "";
-    if (!state.logs.length) {
-      el.logTableBody.innerHTML = `<tr><td colspan="7" class="muted">No log entries yet.</td></tr>`;
-      return;
-    }
-    state.logs.forEach((log) => {
-      const row = document.createElement("tr");
-      row.innerHTML = `
-        <td>${formatDateTime(log.created_at)}</td>
-        <td>${escapeHtml(log.username || "-")}</td>
-        <td>${escapeHtml(capitalizeRole(log.role || "-"))}</td>
-        <td>${escapeHtml(log.action || "-")}</td>
-        <td>${escapeHtml(log.entity || "-")}</td>
-        <td>${escapeHtml(log.details || "-")}</td>
-        <td>${escapeHtml(log.explanation || "-")}</td>
-      `;
-      el.logTableBody.appendChild(row);
-    });
+  if (state.logSortField === field) {
+    state.logSortDirection = state.logSortDirection === "asc" ? "desc" : "asc";
+  } else {
+    state.logSortField = field;
+    state.logSortDirection = field === "created_at" ? "desc" : "asc";
   }
 
+  renderLogs();
+}
+
+function getSortedLogs() {
+  const logs = [...state.logs];
+  const field = state.logSortField || "created_at";
+  const direction = state.logSortDirection === "asc" ? 1 : -1;
+
+  return logs.sort((a, b) => {
+    if (field === "created_at") {
+      const aTime = new Date(a.created_at || 0).getTime();
+      const bTime = new Date(b.created_at || 0).getTime();
+      return (aTime - bTime) * direction;
+    }
+
+    const aValue = String(a?.[field] ?? "").toLowerCase();
+    const bValue = String(b?.[field] ?? "").toLowerCase();
+    return aValue.localeCompare(bValue) * direction;
+  });
+}
+
+function renderLogSortIndicators() {
+  ["created_at", "username", "role", "action", "entity"].forEach((field) => {
+    const indicator = document.getElementById(`logSort-${field}`);
+    if (!indicator) return;
+
+    if (state.logSortField === field) {
+      indicator.textContent = state.logSortDirection === "asc" ? " ▲" : " ▼";
+    } else {
+      indicator.textContent = "";
+    }
+  });
+}
+  function renderLogs() {
+  if (!canViewLogs()) return;
+
+  renderLogSortIndicators();
+  el.logTableBody.innerHTML = "";
+
+  if (!state.logs.length) {
+    el.logTableBody.innerHTML = `<tr><td colspan="7" class="muted">No log entries yet.</td></tr>`;
+    return;
+  }
+
+  const logs = getSortedLogs();
+
+  logs.forEach((log) => {
+    const row = document.createElement("tr");
+    row.innerHTML = `
+      <td>${formatDateTime(log.created_at)}</td>
+      <td>${escapeHtml(log.username || "-")}</td>
+      <td>${escapeHtml(capitalizeRole(log.role || "-"))}</td>
+      <td>${escapeHtml(log.action || "-")}</td>
+      <td>${escapeHtml(log.entity || "-")}</td>
+      <td>${escapeHtml(log.details || "-")}</td>
+      <td>${escapeHtml(log.explanation || "-")}</td>
+    `;
+    el.logTableBody.appendChild(row);
+  });
+}
   async function refreshAccounts() {
     await loadAccounts();
     renderAccountsView();
