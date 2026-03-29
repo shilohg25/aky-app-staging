@@ -1,5 +1,5 @@
-const SUPABASE_URL = "https://pnadtkjdybaalnaqotiu.supabase.co";
-const SUPABASE_ANON_KEY = "sb_publishable_lnGONrjUkuM00sgdNTS7aQ_lSxolPAd";
+const SUPABASE_URL = "https://hghssblwbezmyrrfthri.supabase.co";
+const SUPABASE_ANON_KEY = "sb_publishable_IL6vSMDa-G1kpWCMR0KKXA_9NtUYIMr";
 const ACCOUNT_ADMIN_FUNCTION_URL = `${SUPABASE_URL}/functions/v1/account-admin`;
 const supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
