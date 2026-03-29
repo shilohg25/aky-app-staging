@@ -1430,7 +1430,7 @@ el.execOutstanding.textContent = formatCompactPeso(
         const row = document.createElement("tr");
         let decisionButtons = "-";
         if (tbv.status === "PENDING" && canApproveTbv()) decisionButtons = `<button class="btn btn-light action-decide-tbv">Review</button>`;
-                row.innerHTML = `
+                        row.innerHTML = `
           <td>${formatDateTime(tbv.created_at)}</td>
           <td>${escapeHtml(customer?.name || "-")}</td>
           <td>${escapeHtml(invoice?.invoice_number || "-")}</td>
