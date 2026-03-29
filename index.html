@@ -347,19 +347,19 @@
           <p class="muted">Visible to owner, admin, and co-owner.</p>
         </div>
         <div class="panel">
-          <div class="table-wrap">
+          <div class="table-wrap log-table-scroll">
             <table class="records-table">
-              <thead>
-                <tr>
-                  <th>Date/Time</th>
-                  <th>User</th>
-                  <th>Role</th>
-                  <th>Action</th>
-                  <th>Entity</th>
-                  <th>Details</th>
-                  <th>Explanation</th>
-                </tr>
-              </thead>
+             <thead>
+  <tr>
+    <th class="sortable-th" data-sort="created_at">Date/Time <span id="logSort-created_at" class="sort-indicator"></span></th>
+    <th class="sortable-th" data-sort="username">User <span id="logSort-username" class="sort-indicator"></span></th>
+    <th class="sortable-th" data-sort="role">Role <span id="logSort-role" class="sort-indicator"></span></th>
+    <th class="sortable-th" data-sort="action">Action <span id="logSort-action" class="sort-indicator"></span></th>
+    <th class="sortable-th" data-sort="entity">Entity <span id="logSort-entity" class="sort-indicator"></span></th>
+    <th>Details</th>
+    <th>Explanation</th>
+  </tr>
+</thead>
               <tbody id="logTableBody"></tbody>
             </table>
           </div>
