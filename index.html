@@ -59,27 +59,29 @@
         <button id="navCustomers" class="btn nav-btn active">Customers</button>
         <button id="navExecutive" class="btn nav-btn executive-access hidden">Executive View</button>
         <button id="navNotifications" class="btn nav-btn notification-access hidden">Notifications</button>
-        <button id="navReports" class="btn nav-btn">Daily Reports</button>
+        <button id="navReports" class="btn nav-btn">Reports</button>
         <button id="navLogs" class="btn nav-btn log-access hidden">Log History</button>
         <button id="navAccounts" class="btn nav-btn owner-access hidden">Accounts</button>
         <button id="openChangePasswordBtn" class="btn btn-light wide-btn">Change Password</button>
         <button id="logoutBtn" class="btn btn-danger wide-btn">Logout</button>
       </div>
 
-      <div class="panel customer-panel">
-        <div class="panel-row">
-          <h3 class="panel-title">Customers</h3>
-          <button id="openCustomerModalBtn" class="btn btn-primary small-btn">Add Customer</button>
-        </div>
+<div class="panel customer-panel">
+  <div class="panel-row">
+    <h3 class="panel-title">Customers</h3>
+    <button id="openCustomerModalBtn" class="btn btn-primary small-btn">Add Customer</button>
+  </div>
 
-        <div id="customerList" class="customer-list"></div>
+  <div class="search-box customer-search-box">
+    <input id="customerSearch" type="text" placeholder="Search customer" />
+    <div class="search-actions">
+      <button id="customerSearchBtn" class="btn btn-secondary">Search</button>
+      <button id="customerClearSearchBtn" class="btn btn-light">Clear</button>
+    </div>
+  </div>
 
-        <div class="search-box">
-          <input id="customerSearch" type="text" placeholder="Search customer" />
-          <button id="customerSearchBtn" class="btn btn-secondary wide-btn">Search</button>
-          <button id="customerClearSearchBtn" class="btn btn-light wide-btn">Clear</button>
-        </div>
-      </div>
+  <div id="customerList" class="customer-list"></div>
+</div>
     </aside>
 
     <main class="main-content">
@@ -117,14 +119,14 @@
 
           <div class="panel">
             <h3 class="panel-title">Customer Contacts</h3>
-            <div id="customerContacts"></div>
+            <div id="customerContacts" class="customer-contacts-layout"></div>
           </div>
 
           <div class="panel">
             <div class="table-header">
               <h3 class="panel-title">Invoices</h3>
             </div>
-            <div class="table-wrap">
+            <div class="table-wrap customer-table-scroll">
               <table class="records-table">
                 <thead>
                   <tr>
@@ -149,7 +151,7 @@
             <div class="table-header">
               <h3 class="panel-title">Payments</h3>
             </div>
-            <div class="table-wrap">
+            <div class="table-wrap customer-table-scroll">
               <table class="records-table">
                 <thead>
                   <tr>
@@ -221,7 +223,7 @@
 
         <div class="panel">
           <h3 class="panel-title">TBV Requests</h3>
-          <div class="table-wrap">
+          <div class="table-wrap notifications-table-scroll">
             <table class="records-table">
               <thead>
                 <tr>
@@ -241,7 +243,7 @@
 
         <div class="panel">
           <h3 class="panel-title">Invoices Over 90 Days</h3>
-          <div class="table-wrap">
+          <div class="table-wrap notifications-table-scroll">
             <table class="records-table">
               <thead>
                 <tr>
@@ -261,7 +263,7 @@
       <section id="reportsView" class="view-section hidden">
         <div class="panel">
           <div class="panel-row">
-            <h2 class="panel-title">Daily Reports</h2>
+            <h2 class="panel-title">Reports</h2>
             <div class="btn-row">
               <button id="downloadReportBtn" class="btn btn-primary">Download CSV</button>
               <button id="printReportBtn" class="btn btn-light">Print</button>
