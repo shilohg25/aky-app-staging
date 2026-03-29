@@ -18,4 +18,6 @@ window.state = {
   selectedTbvForDecision: null,
   editingAccountId: null,
   selectedAccountForReset: null
+    logSortField: "created_at",
+  logSortDirection: "desc"
 };
