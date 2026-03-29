@@ -180,11 +180,14 @@ const { supabaseClient, ACCOUNT_ADMIN_FUNCTION_URL, ROLE_PERMISSIONS, state } = 
       approveTbvBtn: byId("approveTbvBtn"),
 
       soaModal: byId("soaModal"),
-      closeSoaModalBtn: byId("closeSoaModalBtn"),
-      soaPreparedBy: byId("soaPreparedBy"),
-      soaAsOfDate: byId("soaAsOfDate"),
-      soaShowPayments: byId("soaShowPayments"),
-      generateSoaBtn: byId("generateSoaBtn"),
+closeSoaModalBtn: byId("closeSoaModalBtn"),
+soaPreparedBy: byId("soaPreparedBy"),
+soaAsOfDate: byId("soaAsOfDate"),
+soaShowPayments: byId("soaShowPayments"),
+soaPaymentRangeWrap: byId("soaPaymentRangeWrap"),
+soaPaymentsFrom: byId("soaPaymentsFrom"),
+soaPaymentsTo: byId("soaPaymentsTo"),
+generateSoaBtn: byId("generateSoaBtn"),
 
       accountsTableBody: byId("accountsTableBody"),
       accountSearch: byId("accountSearch"),
@@ -286,8 +289,10 @@ const { supabaseClient, ACCOUNT_ADMIN_FUNCTION_URL, ROLE_PERMISSIONS, state } = 
     el.denyTbvBtn.addEventListener("click", () => decideTbv("DENIED"));
 
     el.createSOABtn.addEventListener("click", openSoaModal);
-    el.closeSoaModalBtn.addEventListener("click", () => closeModal(el.soaModal));
-    el.generateSoaBtn.addEventListener("click", generateSoa);
+el.closeSoaModalBtn.addEventListener("click", () => closeModal(el.soaModal));
+el.soaShowPayments.addEventListener("change", renderSoaPaymentRangeVisibility);
+el.soaAsOfDate.addEventListener("change", autofillSoaPaymentRange);
+el.generateSoaBtn.addEventListener("click", generateSoa);
 
     el.editCustomerBtn.addEventListener("click", openEditCustomerModal);
     el.deleteCustomerBtn.addEventListener("click", deleteSelectedCustomer);
@@ -1654,7 +1659,22 @@ el.execOutstanding.textContent = formatCompactPeso(
     await refreshAndRenderAll();
     alert(`TBV ${decision === "APPROVED" ? "approved" : "denied"} successfully.`);
   }
+function autofillSoaPaymentRange() {
+  const asOfDate = el.soaAsOfDate.value;
+  if (!asOfDate) return;
 
+  const end = new Date(asOfDate);
+  const start = new Date(asOfDate);
+  start.setDate(start.getDate() - 30);
+
+  el.soaPaymentsTo.value = asOfDate;
+  el.soaPaymentsFrom.value = start.toISOString().slice(0, 10);
+}
+
+function renderSoaPaymentRangeVisibility() {
+  const showPayments = !!el.soaShowPayments.checked;
+  el.soaPaymentRangeWrap.classList.toggle("hidden", !showPayments);
+}
   function openSoaModal() {
     if (!canGenerateSoa()) return;
     const customer = getSelectedCustomer();
