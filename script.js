@@ -393,7 +393,21 @@ el.generateSoaBtn.addEventListener("click", generateSoa);
   function canGenerateSoa() { return getRoleConfig().generateSoa; }
   function canManageAccounts() { return getRoleConfig().manageAccounts; }
   function editNoteRequired() { return getRoleConfig().noteRequiredOnEdit; }
+  function isVoidedInvoice(invoice) {
+    return !!invoice?.is_voided;
+  }
 
+  function getActiveInvoices() {
+    return state.invoices.filter((invoice) => !isVoidedInvoice(invoice));
+  }
+
+  function getInvoiceReferenceLabel(invoice) {
+    if (!invoice) return "Deleted Invoice";
+    if (isVoidedInvoice(invoice)) {
+      return invoice.invoice_number ? `Voided Invoice #${invoice.invoice_number}` : "Voided Invoice";
+    }
+    return invoice.invoice_number || "Invoice";
+  }
   async function login() {
     const email = el.loginUsername.value.trim();
     const password = el.loginPassword.value;
@@ -474,7 +488,7 @@ el.generateSoaBtn.addEventListener("click", generateSoa);
     const [customersRes, contactsRes, invoicesRes, invoiceItemsRes, paymentsRes, allocationsRes, logsRes, tbvsRes] = await Promise.all([
       supabaseClient.from("customers").select("*").order("name", { ascending: true }),
       supabaseClient.from("customer_contacts").select("*").order("created_at", { ascending: true }),
-      supabaseClient.from("invoices").select("*").eq("is_voided", false).order("invoice_date", { ascending: false }),
+      supabaseClient.from("invoices").select("*").order("invoice_date", { ascending: false }),
       supabaseClient.from("invoice_items").select("*").order("created_at", { ascending: true }),
       supabaseClient.from("payments").select("*").order("payment_date", { ascending: false }),
       supabaseClient.from("payment_allocations").select("*"),
@@ -538,9 +552,9 @@ el.generateSoaBtn.addEventListener("click", generateSoa);
 
     state.payments = state.payments.map((p) => ({ ...p, allocations: paymentAllocMap.get(p.id) || [] }));
 
-    state.invoices.forEach((invoice) => {
+        state.invoices.forEach((invoice) => {
       const customer = customerMap.get(invoice.customer_id);
-      if (customer) customer.invoices.push(invoice);
+      if (customer && !isVoidedInvoice(invoice)) customer.invoices.push(invoice);
     });
 
     state.payments.forEach((payment) => {
@@ -749,7 +763,7 @@ function renderCustomerContacts(customer) {
           };
         });
 
-        const invoiceNumbers = allocations.map((x) => x.invoice?.invoice_number || "Deleted Invoice");
+                const invoiceNumbers = allocations.map((x) => getInvoiceReferenceLabel(x.invoice));
         const openBalance = allocations.reduce((sum, x) => sum + Number(x.invoice?.balance || 0), 0);
 
         return {
@@ -1313,7 +1327,7 @@ function renderCustomerContacts(customer) {
     customer.payments.slice().sort((a, b) => String(b.payment_date).localeCompare(String(a.payment_date))).forEach((payment) => {
       const appliedTo = payment.allocations.map((alloc) => {
         const invoice = state.invoices.find((inv) => inv.id === alloc.invoice_id);
-        return `${invoice ? invoice.invoice_number : "Deleted Invoice"} (${formatPeso(getAllocationAmount(alloc))})`;
+                return `${getInvoiceReferenceLabel(invoice)} (${formatPeso(getAllocationAmount(alloc))})`;
       }).join(", ");
       const details = formatPaymentDetails(payment);
       const row = document.createElement("tr");
@@ -1334,7 +1348,7 @@ function renderCustomerContacts(customer) {
     if (!canViewExecutive()) return;
     const from = el.execDateFrom.value || null;
     const to = el.execDateTo.value || null;
-    const invoices = state.invoices.filter((x) => passesDateFilter(x.invoice_date, from, to));
+        const invoices = getActiveInvoices().filter((x) => passesDateFilter(x.invoice_date, from, to));
     const payments = state.payments.filter((x) => passesDateFilter(x.payment_date, from, to));
     const overdueInvoices = invoices.filter((x) => x.balance > 0 && getDaysOpen(x.invoice_date) > 90);
     el.execCustomers.textContent = String(state.customers.length);
@@ -1467,7 +1481,7 @@ el.execOutstanding.textContent = formatCompactPeso(
       });
     }
 
-    const overdue = state.invoices.filter((x) => x.balance > 0 && getDaysOpen(x.invoice_date) > 90);
+        const overdue = getActiveInvoices().filter((x) => x.balance > 0 && getDaysOpen(x.invoice_date) > 90);
     if (!overdue.length) {
       el.notificationsOverdueBody.innerHTML = `<tr><td colspan="5" class="muted">No overdue invoices.</td></tr>`;
     } else {
@@ -1491,7 +1505,7 @@ el.execOutstanding.textContent = formatCompactPeso(
   }
 
   function getReportRows() {
-    return state.invoices.map((invoice) => {
+        return getActiveInvoices().map((invoice) => {
       const customer = state.customers.find((c) => c.id === invoice.customer_id);
       const paymentDates = state.allocations.filter((a) => a.invoice_id === invoice.id).map((a) => state.payments.find((p) => p.id === a.payment_id)?.payment_date).filter(Boolean).sort();
       const latestPaidDate = paymentDates.length ? paymentDates[paymentDates.length - 1] : "";
