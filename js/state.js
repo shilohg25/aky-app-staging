@@ -17,7 +17,7 @@ window.state = {
   selectedInvoiceForTbv: null,
   selectedTbvForDecision: null,
   editingAccountId: null,
-  selectedAccountForReset: null
+  selectedAccountForReset: null,
     logSortField: "created_at",
   logSortDirection: "desc"
 };
