@@ -1570,13 +1570,13 @@ el.execOutstanding.textContent = formatCompactPeso(
     const rows = getReportRows();
     const headers = ["Customer", "Invoice #", "Invoice Date", "PO #", "Reference", "Total", "Paid", "Balance", "Status", "Latest Paid Date"];
     const csv = [headers.join(","), ...rows.map((r) => [csvSafe(r.customerName), csvSafe(r.invoiceNumber), csvSafe(r.invoiceDate), csvSafe(r.poNumber), csvSafe(r.referenceInfo), r.total, r.paid, r.balance, csvSafe(r.status), csvSafe(r.latestPaidDate)].join(","))].join("\n");
-    downloadTextFile(`AKY_Daily_Report_${todayStr()}.csv`, csv, "text/csv;charset=utf-8");
+    downloadTextFile(`AKY_Report_${todayStr()}.csv`, csv, "text/csv;charset=utf-8");
   }
 
   function printReport() {
     const rows = getReportRows();
     const html = `
-      <html><head><title>AKY Daily Report</title><style>
+      <html><head><title>AKY Report</title><style>
       body { font-family: Arial, sans-serif; padding: 24px; color: #111; }
       h1 { margin: 0 0 8px; }
       .meta { margin-bottom: 16px; color: #555; }
@@ -1584,7 +1584,7 @@ el.execOutstanding.textContent = formatCompactPeso(
       th, td { border: 1px solid #ccc; padding: 8px; text-align: left; }
       th { background: #f3f3f3; }
       </style></head><body>
-      <h1>AKY Daily Report</h1>
+      <h1>AKY Report</h1>
       <div class="meta">Generated on ${new Date().toLocaleString()}</div>
       <table><thead><tr>
       <th>Customer</th><th>Invoice #</th><th>Invoice Date</th><th>PO #</th><th>Reference</th><th>Total</th><th>Paid</th><th>Balance</th><th>Status</th><th>Latest Paid Date</th>
