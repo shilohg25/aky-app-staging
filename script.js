@@ -1401,9 +1401,17 @@ const supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
     const overdueInvoices = invoices.filter((x) => x.balance > 0 && getDaysOpen(x.invoice_date) > 90);
     el.execCustomers.textContent = String(state.customers.length);
     el.execInvoices.textContent = String(invoices.length);
-    el.execInvoiced.textContent = formatPeso(invoices.reduce((sum, x) => sum + Number(x.total || 0), 0));
-    el.execCollected.textContent = formatPeso(payments.filter((p) => p.cleared !== false).reduce((sum, x) => sum + Number(x.amount || 0), 0));
-    el.execOutstanding.textContent = formatPeso(invoices.reduce((sum, x) => sum + Number(x.balance || 0), 0));
+    el.execInvoiced.textContent = formatCompactPeso(
+  invoices.reduce((sum, x) => sum + Number(x.total || 0), 0)
+);
+
+el.execCollected.textContent = formatCompactPeso(
+  payments.filter((p) => p.cleared !== false).reduce((sum, x) => sum + Number(x.amount || 0), 0)
+);
+
+el.execOutstanding.textContent = formatCompactPeso(
+  invoices.reduce((sum, x) => sum + Number(x.balance || 0), 0)
+);
     el.execOverdue.textContent = String(overdueInvoices.length);
 
     el.agingTableBody.innerHTML = "";
@@ -2074,6 +2082,43 @@ const supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
   function num(value) { const n = parseFloat(value); return Number.isFinite(n) ? n : 0; }
   function round2(value) { return Math.round((value + Number.EPSILON) * 100) / 100; }
   function formatPeso(value) { return new Intl.NumberFormat("en-PH", { style: "currency", currency: "PHP", minimumFractionDigits: 0, maximumFractionDigits: 2 }).format(round2(Number(value || 0))); }
+  function trimZeros(value) {
+  return String(value).replace(/(\.\d*?[1-9])0+$|\.0+$/, "$1");
+}
+
+function formatCompactPeso(value) {
+  const amount = Number(value || 0);
+  const abs = Math.abs(amount);
+
+  if (abs < 1000) {
+    return formatPeso(amount);
+  }
+
+  const units = [
+    { value: 1e15, suffix: "Q" },
+    { value: 1e12, suffix: "T" },
+    { value: 1e9, suffix: "B" },
+    { value: 1e6, suffix: "M" },
+    { value: 1e3, suffix: "K" }
+  ];
+
+  for (const unit of units) {
+    if (abs >= unit.value) {
+      const scaled = amount / unit.value;
+
+      let decimals = 3;
+      if (Math.abs(scaled) >= 100) {
+        decimals = 1;
+      } else if (Math.abs(scaled) >= 10) {
+        decimals = 2;
+      }
+
+      return `₱${trimZeros(scaled.toFixed(decimals))}${unit.suffix}`;
+    }
+  }
+
+  return formatPeso(amount);
+}
   function formatNumber(value) {
     const n = Number(value || 0);
     return Number.isInteger(n)
