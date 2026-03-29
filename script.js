@@ -230,6 +230,7 @@ const { supabaseClient, ACCOUNT_ADMIN_FUNCTION_URL, ROLE_PERMISSIONS, state } = 
     el.navAccounts.addEventListener("click", () => setView("accounts"));
 
     el.openCustomerModalBtn.addEventListener("click", openAddCustomerModal);
+    el.customerSearch.addEventListener("input", renderCustomerList);
     el.customerSearchBtn.addEventListener("click", renderCustomerList);
     el.customerClearSearchBtn.addEventListener("click", () => {
       el.customerSearch.value = "";
@@ -663,17 +664,47 @@ const { supabaseClient, ACCOUNT_ADMIN_FUNCTION_URL, ROLE_PERMISSIONS, state } = 
     el.createSOABtn.classList.toggle("hidden", !canGenerateSoa());
   }
 
-  function renderCustomerContacts(customer) {
-    const contacts = [{ contact_name: customer.name, phone: customer.phone, email: customer.email, primary: true }, ...(customer.contacts || [])];
-    el.customerContacts.innerHTML = contacts.map((contact, index) => `
-      <div class="contact-card">
-        <strong>${contact.primary ? "Primary Contact" : "Additional Contact " + index}</strong><br>
-        Name: ${escapeHtml(contact.contact_name || "-")}<br>
-        Phone: ${escapeHtml(contact.phone || "-")}<br>
-        Email: ${escapeHtml(contact.email || "-")}
+function renderCustomerContacts(customer) {
+  const primary = {
+    contact_name: customer.name,
+    phone: customer.phone,
+    email: customer.email
+  };
+
+  const additionalContacts = customer.contacts || [];
+
+  const additionalHtml = additionalContacts.length
+    ? additionalContacts.map((contact, index) => `
+        <div class="contact-card">
+          <strong>Additional Contact ${index + 1}</strong><br>
+          Name: ${escapeHtml(contact.contact_name || "-")}<br>
+          Phone: ${escapeHtml(contact.phone || "-")}<br>
+          Email: ${escapeHtml(contact.email || "-")}
+        </div>
+      `).join("")
+    : `<div class="muted">No additional contacts.</div>`;
+
+  el.customerContacts.innerHTML = `
+    <div class="contacts-split">
+      <div class="contact-column">
+        <div class="contact-column-title">Primary Contact</div>
+        <div class="contact-card primary-contact-card">
+          <strong>Primary Contact</strong><br>
+          Name: ${escapeHtml(primary.contact_name || "-")}<br>
+          Phone: ${escapeHtml(primary.phone || "-")}<br>
+          Email: ${escapeHtml(primary.email || "-")}
+        </div>
       </div>
-    `).join("");
-  }
+
+      <div class="contact-column">
+        <div class="contact-column-title">Additional Contacts</div>
+        <div class="contact-grid">
+          ${additionalHtml}
+        </div>
+      </div>
+    </div>
+  `;
+}
 
   function renderCustomerSummary(customer) {
     const totalInvoiced = customer.invoices.reduce((sum, x) => sum + Number(x.total || 0), 0);
