@@ -1301,22 +1301,35 @@ function renderCustomerContacts(customer) {
     const { error: allocError } = await supabaseClient.from("payment_allocations").insert(allocRows);
     if (allocError) return alert(allocError.message);
 
-    for (const alloc of state.paymentDraft.allocations) {
-      const invoice = state.invoices.find((x) => x.id === alloc.invoiceId);
-      if (!invoice) continue;
-      const newPaid = round2(Number(invoice.paidAmount || invoice.paid_amount || 0) + alloc.amount);
-      const newBalance = round2(Math.max(0, Number(invoice.total || invoice.total_amount || 0) - newPaid));
-      const newStatus = newBalance <= 0 ? "PAID" : newBalance < Number(invoice.total || invoice.total_amount || 0) ? "PARTIALLY_PAID" : "UNPAID";
-      const { error } = await supabaseClient.from("invoices").update({ paid_amount: newPaid, balance_amount: newBalance, primary_status: newStatus }).eq("id", alloc.invoiceId);
-      if (error) return alert(error.message);
+        if (cleared) {
+      for (const alloc of state.paymentDraft.allocations) {
+        const invoice = state.invoices.find((x) => x.id === alloc.invoiceId);
+        if (!invoice) continue;
+        const newPaid = round2(Number(invoice.paidAmount || invoice.paid_amount || 0) + alloc.amount);
+        const newBalance = round2(Math.max(0, Number(invoice.total || invoice.total_amount || 0) - newPaid));
+        const newStatus = newBalance <= 0 ? "PAID" : newBalance < Number(invoice.total || invoice.total_amount || 0) ? "PARTIALLY_PAID" : "UNPAID";
+        const { error } = await supabaseClient
+          .from("invoices")
+          .update({
+            paid_amount: newPaid,
+            balance_amount: newBalance,
+            primary_status: newStatus
+          })
+          .eq("id", alloc.invoiceId);
+
+        if (error) return alert(error.message);
+      }
     }
 
     await addLog("Create", "Payment", `${payment.payment_type} - ${payment.method} - ${formatPeso(amount)}`, "", null, payment);
+        const successMessage = method === "Cheque"
+      ? "Cheque payment saved as pending clearance. Invoice balances were not changed."
+      : "Payment saved successfully.";
+
     state.paymentDraft = null;
     closeModal(el.paymentMethodModal);
     await refreshAndRenderAll();
-    alert("Payment saved successfully.");
-  }
+    alert(successMessage);
 
   function renderPaymentTable(customer) {
     el.paymentTableBody.innerHTML = "";
