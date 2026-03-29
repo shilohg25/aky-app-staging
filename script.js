@@ -393,6 +393,16 @@ el.generateSoaBtn.addEventListener("click", generateSoa);
   function canGenerateSoa() { return getRoleConfig().generateSoa; }
   function canManageAccounts() { return getRoleConfig().manageAccounts; }
   function editNoteRequired() { return getRoleConfig().noteRequiredOnEdit; }
+    function canEditInvoiceRecord(invoice) {
+    if (!invoice) return false;
+    if (!canEditInvoice()) return false;
+
+    const role = state.currentProfile?.role || "";
+    const paidAmount = Number(invoice.paidAmount || invoice.paid_amount || 0);
+
+    if (role === "admin" && paidAmount > 0) return false;
+    return true;
+  }
   function isVoidedInvoice(invoice) {
     return !!invoice?.is_voided;
   }
@@ -1017,8 +1027,11 @@ function renderCustomerContacts(customer) {
       if (!canEditInvoice()) return;
       const editNote = el.editRequiredNote.value.trim();
       if (editNoteRequired() && !editNote) return alert("Edit note is required for admin edits.");
-      const oldInvoice = state.invoices.find((x) => x.id === state.editingInvoiceId);
+            const oldInvoice = state.invoices.find((x) => x.id === state.editingInvoiceId);
       if (!oldInvoice) return alert("Invoice not found.");
+      if (!canEditInvoiceRecord(oldInvoice)) {
+        return alert("Admin cannot edit partially paid or paid invoices.");
+      }
       const paidAmount = Number(oldInvoice.paidAmount || 0);
       const balanceAmount = round2(Math.max(0, total - paidAmount));
       const primaryStatus = balanceAmount <= 0 ? "PAID" : balanceAmount < total ? "PARTIALLY_PAID" : "UNPAID";
@@ -1060,7 +1073,9 @@ function renderCustomerContacts(customer) {
     `).join("");
 
     let actionButtons = "";
-    if (canEditInvoice()) actionButtons += `<button class="btn btn-light" id="invoiceViewEditBtn">Edit Invoice</button>`;
+        if (canEditInvoiceRecord(invoice)) {
+      actionButtons += `<button class="btn btn-light" id="invoiceViewEditBtn">Edit Invoice</button>`;
+    }
     if (canRequestTbv() && !tbv) actionButtons += `<button class="btn btn-danger" id="invoiceViewTbvBtn">TBV</button>`;
 
     el.invoiceViewContent.innerHTML = `
@@ -1102,7 +1117,7 @@ function renderCustomerContacts(customer) {
       const tbv = state.tbvs.find((t) => t.invoice_id === invoice.id && t.status === "PENDING");
       const tr = document.createElement("tr");
       let actionHtml = `<button class="btn btn-light action-view">View</button>`;
-      if (canEditInvoice()) actionHtml += ` <button class="btn btn-primary action-edit">Edit</button>`;
+            if (canEditInvoiceRecord(invoice)) actionHtml += ` <button class="btn btn-primary action-edit">Edit</button>`;
       if (canRequestTbv() && !tbv) actionHtml += ` <button class="btn btn-danger action-tbv">TBV</button>`;
       tr.innerHTML = `
           <td class="clickable">${escapeHtml(invoice.invoice_number)}</td>
@@ -1629,7 +1644,10 @@ el.execOutstanding.textContent = formatCompactPeso(
     if (!canRequestTbv()) return;
     const invoice = state.invoices.find((x) => x.id === invoiceId);
     const customer = state.customers.find((c) => c.id === invoice?.customer_id);
-    if (!invoice) return;
+        if (!invoice) return;
+    if (!canEditInvoiceRecord(invoice)) {
+      return alert("Admin cannot edit partially paid or paid invoices.");
+    }
     state.selectedInvoiceForTbv = invoiceId;
     el.tbvExplanationInput.value = "";
     el.tbvInvoiceInfo.innerHTML = `Customer: <strong>${escapeHtml(customer?.name || "-")}</strong><br>Invoice #: <strong>${escapeHtml(invoice.invoice_number)}</strong><br>Balance: <strong>${formatPeso(invoice.balance)}</strong>`;
