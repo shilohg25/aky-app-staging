@@ -1422,7 +1422,7 @@ el.execOutstanding.textContent = formatCompactPeso(
 
     const tbvs = state.tbvs.slice().sort((a, b) => String(b.created_at).localeCompare(String(a.created_at)));
     if (!tbvs.length) {
-      el.tbvTableBody.innerHTML = `<tr><td colspan="7" class="muted">No TBV requests.</td></tr>`;
+      el.tbvTableBody.innerHTML = `<tr><td colspan="8" class="muted">No TBV requests.</td></tr>`;
     } else {
       tbvs.forEach((tbv) => {
         const invoice = state.invoices.find((x) => x.id === tbv.invoice_id);
