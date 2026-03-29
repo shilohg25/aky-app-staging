@@ -713,22 +713,33 @@
         <h3>Create Statement of Account</h3>
         <button id="closeSoaModalBtn" class="icon-btn" type="button">&times;</button>
       </div>
-      <div class="form-grid one-col">
-        <div class="field">
-          <label for="soaPreparedBy">Prepared By *</label>
-          <input id="soaPreparedBy" type="text" />
-        </div>
-        <div class="field">
-          <label for="soaAsOfDate">As of Date *</label>
-          <input id="soaAsOfDate" type="date" />
-        </div>
-        <div class="field">
-          <label class="checkbox-row">
-            <input id="soaShowPayments" type="checkbox" checked />
-            Show previous payments
-          </label>
-        </div>
-      </div>
+<div class="form-grid one-col">
+  <div class="field">
+    <label for="soaPreparedBy">Prepared By *</label>
+    <input id="soaPreparedBy" type="text" />
+  </div>
+
+  <div class="field">
+    <label for="soaAsOfDate">As of Date *</label>
+    <input id="soaAsOfDate" type="date" />
+  </div>
+
+  <div class="field checkbox-row">
+    <input id="soaShowPayments" type="checkbox" />
+    <label for="soaShowPayments">Show previous payments</label>
+  </div>
+
+  <div id="soaPaymentRangeWrap" class="form-grid two-col">
+    <div class="field">
+      <label for="soaPaymentsFrom">Payments From</label>
+      <input id="soaPaymentsFrom" type="date" />
+    </div>
+    <div class="field">
+      <label for="soaPaymentsTo">Payments To</label>
+      <input id="soaPaymentsTo" type="date" />
+    </div>
+  </div>
+</div>
       <div class="modal-footer">
         <button id="generateSoaBtn" class="btn btn-primary" type="button">Generate SOA</button>
       </div>
