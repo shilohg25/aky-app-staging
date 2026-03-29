@@ -1330,6 +1330,7 @@ function renderCustomerContacts(customer) {
     closeModal(el.paymentMethodModal);
     await refreshAndRenderAll();
     alert(successMessage);
+    }
 
   function renderPaymentTable(customer) {
     el.paymentTableBody.innerHTML = "";
