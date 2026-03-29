@@ -1430,10 +1430,11 @@ el.execOutstanding.textContent = formatCompactPeso(
         const row = document.createElement("tr");
         let decisionButtons = "-";
         if (tbv.status === "PENDING" && canApproveTbv()) decisionButtons = `<button class="btn btn-light action-decide-tbv">Review</button>`;
-        row.innerHTML = `
+                row.innerHTML = `
           <td>${formatDateTime(tbv.created_at)}</td>
           <td>${escapeHtml(customer?.name || "-")}</td>
           <td>${escapeHtml(invoice?.invoice_number || "-")}</td>
+          <td>${invoice ? statusPill(invoice.status) : "-"}</td>
           <td>${escapeHtml(tbv.requested_by_name || "-")} (${escapeHtml(capitalizeRole(tbv.requested_by_role || ""))})</td>
           <td>${escapeHtml(tbv.explanation || "-")}</td>
           <td>${escapeHtml(tbv.status)}</td>
@@ -1634,7 +1635,12 @@ el.execOutstanding.textContent = formatCompactPeso(
     if (!tbv) return;
     state.selectedTbvForDecision = tbvId;
     el.tbvDecisionNotesInput.value = "";
-    el.tbvDecisionInfo.innerHTML = `Customer: <strong>${escapeHtml(customer?.name || "-")}</strong><br>Invoice #: <strong>${escapeHtml(invoice?.invoice_number || "-")}</strong><br>Explanation: <strong>${escapeHtml(tbv.explanation)}</strong>`;
+        el.tbvDecisionInfo.innerHTML = `
+      Customer: <strong>${escapeHtml(customer?.name || "-")}</strong><br>
+      Invoice #: <strong>${escapeHtml(invoice?.invoice_number || "-")}</strong><br>
+      Invoice Status: ${invoice ? statusPill(invoice.status) : "-"}<br>
+      Explanation: <strong>${escapeHtml(tbv.explanation)}</strong>
+    `;
     openModal(el.tbvDecisionModal);
   }
 
