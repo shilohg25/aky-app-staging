@@ -1676,14 +1676,20 @@ function renderSoaPaymentRangeVisibility() {
   el.soaPaymentRangeWrap.classList.toggle("hidden", !showPayments);
 }
   function openSoaModal() {
-    if (!canGenerateSoa()) return;
-    const customer = getSelectedCustomer();
-    if (!customer) return alert("Please select a customer first.");
-    el.soaPreparedBy.value = state.currentProfile?.username || "";
-    el.soaAsOfDate.value = todayStr();
-    el.soaShowPayments.checked = true;
-    openModal(el.soaModal);
-  }
+  if (!canGenerateSoa()) return;
+
+  const customer = getSelectedCustomer();
+  if (!customer) return alert("Please select a customer first.");
+
+  el.soaPreparedBy.value = state.currentProfile?.username || state.currentProfile?.email || "";
+  el.soaAsOfDate.value = todayStr();
+  el.soaShowPayments.checked = true;
+
+  autofillSoaPaymentRange();
+  renderSoaPaymentRangeVisibility();
+
+  openModal(el.soaModal);
+}
 
   function generateSoa() {
     const customer = getSelectedCustomer();
