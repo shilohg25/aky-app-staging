@@ -57,11 +57,12 @@
 
       <div class="panel nav-panel">
         <button id="navCustomers" class="btn nav-btn active">Customers</button>
-        <button id="navExecutive" class="btn nav-btn executive-access hidden">Executive View</button>
-        <button id="navNotifications" class="btn nav-btn notification-access hidden">Notifications</button>
-        <button id="navReports" class="btn nav-btn">Reports</button>
-        <button id="navLogs" class="btn nav-btn log-access hidden">Log History</button>
-        <button id="navAccounts" class="btn nav-btn owner-access hidden">Accounts</button>
+<button id="navExecutive" class="btn nav-btn executive-access hidden">Executive View</button>
+<button id="navNotifications" class="btn nav-btn notification-access hidden">Notifications</button>
+<button id="navChequeRegister" class="btn nav-btn">Cheque Register</button>
+<button id="navReports" class="btn nav-btn">Reports</button>
+<button id="navLogs" class="btn nav-btn log-access hidden">Log History</button>
+<button id="navAccounts" class="btn nav-btn owner-access hidden">Accounts</button>
         <button id="openChangePasswordBtn" class="btn btn-light wide-btn">Change Password</button>
         <button id="logoutBtn" class="btn btn-danger wide-btn">Logout</button>
       </div>
@@ -260,7 +261,39 @@
           </div>
         </div>
       </section>
+<section id="chequeRegisterView" class="view-section hidden">
+  <div class="panel">
+    <div class="panel-row">
+      <div>
+        <h2 class="panel-title">Cheque Register</h2>
+        <p class="muted">Visible to all roles. Admin and owner will be able to process cheque status here.</p>
+      </div>
+    </div>
+  </div>
 
+  <div class="panel">
+    <div class="table-wrap">
+      <table class="records-table">
+        <thead>
+          <tr>
+            <th>Payment Date</th>
+            <th>Customer</th>
+            <th>Cheque #</th>
+            <th>Cheque Date</th>
+            <th>Amount</th>
+            <th>Applied To</th>
+            <th>Status</th>
+            <th>Created By</th>
+            <th>Actions</th>
+          </tr>
+        </thead>
+        <tbody id="chequeRegisterTableBody">
+          <tr><td colspan="9" class="muted">Cheque Register setup complete. Rendering comes next.</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</section>
       <section id="reportsView" class="view-section hidden">
         <div class="panel">
           <div class="panel-row">
