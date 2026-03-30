@@ -1870,7 +1870,7 @@ el.execOutstanding.textContent = formatCompactPeso(
     return payment.payment_type || "-";
   }
     
-    function renderChequeRegisterView() {
+      function renderChequeRegisterView() {
     if (!el.chequeRegisterTableBody) return;
 
     const entries = getChequeRegisterEntries();
