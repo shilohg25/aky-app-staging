@@ -1376,7 +1376,7 @@ function renderCustomerContacts(customer) {
     const { data: payment, error: paymentError } = await supabaseClient.from("payments").insert([{
       customer_id: customer.id,
       payment_date: paymentDate,
-      payment_type: state.paymentDraft.mode === "full" ? "Pay by Invoice" : "Allocate Payment",
+      payment_type: state.paymentDraft.mode === "full" ? "Pay by Invoice" : "Partial Payment",
       method: method,
       amount,
       details,
