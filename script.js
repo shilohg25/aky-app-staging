@@ -1083,7 +1083,28 @@ function renderCustomerContacts(customer) {
     const total = [...el.lineItemsContainer.querySelectorAll(".line-item")].reduce((sum, row) => sum + num(row.querySelector(".line-qty").value) * num(row.querySelector(".line-price").value), 0);
     el.invoiceTotalAmount.textContent = formatPeso(total);
   }
+  function normalizeInvoiceNumberForKey(value) {
+    return String(value || "")
+      .trim()
+      .toUpperCase()
+      .replace(/[^A-Z0-9]/g, "");
+  }
 
+  function findDuplicateInvoiceByNumber(invoiceNumber, currentInvoiceId = null) {
+    const targetKey = normalizeInvoiceNumberForKey(invoiceNumber);
+    if (!targetKey) return null;
+
+    return state.invoices.find((invoice) => {
+      if (!invoice) return false;
+      if (currentInvoiceId && invoice.id === currentInvoiceId) return false;
+
+      const existingKey =
+        invoice.invoice_number_key ||
+        normalizeInvoiceNumberForKey(invoice.invoice_number);
+
+      return existingKey === targetKey;
+    }) || null;
+  }
   async function saveInvoice() {
     const customer = getSelectedCustomer();
     if (!customer) return;
@@ -1091,8 +1112,31 @@ function renderCustomerContacts(customer) {
     const invoiceDate = el.invoiceDate.value;
     const poNumber = el.poNumber.value.trim();
     const referenceInfo = el.referenceInfo.value.trim();
-    if (!invoiceNumber) return alert("Invoice number is required.");
+        if (!invoiceNumber) return alert("Invoice number is required.");
     if (!invoiceDate) return alert("Invoice date is required.");
+
+    const invoiceNumberKey = normalizeInvoiceNumberForKey(invoiceNumber);
+    if (!invoiceNumberKey) {
+      return alert("Invoice number is invalid.");
+    }
+
+    const duplicateInvoice = findDuplicateInvoiceByNumber(invoiceNumber, state.editingInvoiceId);
+    if (duplicateInvoice) {
+      const duplicateCustomer = state.customers.find((c) => c.id === duplicateInvoice.customer_id);
+      const duplicateStatus = duplicateInvoice.is_voided
+        ? "Voided"
+        : (duplicateInvoice.status || duplicateInvoice.primary_status || "Existing");
+
+      return alert(
+        `Invoice number "${invoiceNumber}" already exists.\n\n` +
+        `Existing record:\n` +
+        `Customer: ${duplicateCustomer?.name || "-"}\n` +
+        `Invoice #: ${duplicateInvoice.invoice_number || "-"}\n` +
+        `Date: ${duplicateInvoice.invoice_date || "-"}\n` +
+        `Status: ${duplicateStatus}\n\n` +
+        `Duplicate invoice numbers are not allowed, including voided invoices. Please use a new unique invoice number.`
+      );
+    }
 
     const items = [...el.lineItemsContainer.querySelectorAll(".line-item")].map((row) => {
       const product = row.querySelector(".line-product").value.trim();
@@ -1115,7 +1159,20 @@ function renderCustomerContacts(customer) {
       const paidAmount = Number(oldInvoice.paidAmount || 0);
       const balanceAmount = round2(Math.max(0, total - paidAmount));
       const primaryStatus = balanceAmount <= 0 ? "PAID" : balanceAmount < total ? "PARTIALLY_PAID" : "UNPAID";
-      const { error } = await supabaseClient.from("invoices").update({ invoice_number: invoiceNumber, invoice_date: invoiceDate, po_number: poNumber || null, reference_info: referenceInfo || null, total_amount: total, balance_amount: balanceAmount, primary_status: primaryStatus, updated_at: new Date().toISOString() }).eq("id", state.editingInvoiceId);
+            const { error } = await supabaseClient
+        .from("invoices")
+        .update({
+          invoice_number: invoiceNumber,
+          invoice_number_key: invoiceNumberKey,
+          invoice_date: invoiceDate,
+          po_number: poNumber || null,
+          reference_info: referenceInfo || null,
+          total_amount: total,
+          balance_amount: balanceAmount,
+          primary_status: primaryStatus,
+          updated_at: new Date().toISOString()
+        })
+        .eq("id", state.editingInvoiceId);
       if (error) return alert(error.message);
       const { error: deleteItemsError } = await supabaseClient.from("invoice_items").delete().eq("invoice_id", state.editingInvoiceId);
       if (deleteItemsError) return alert(deleteItemsError.message);
@@ -1124,7 +1181,25 @@ function renderCustomerContacts(customer) {
       await addLog("Edit", "Invoice", invoiceNumber, editNote, oldInvoice, { invoice_number: invoiceNumber, invoice_date: invoiceDate, po_number: poNumber, reference_info: referenceInfo, total_amount: total });
     } else {
       if (!canCreateInvoice()) return;
-      const { data, error } = await supabaseClient.from("invoices").insert([{ customer_id: customer.id, invoice_number: invoiceNumber, invoice_date: invoiceDate, po_number: poNumber || null, reference_info: referenceInfo || null, total_amount: total, paid_amount: 0, balance_amount: total, primary_status: "UNPAID", payment_notice_status: "NONE", created_by: state.currentProfile.id, is_voided: false }]).select().single();
+            const { data, error } = await supabaseClient
+        .from("invoices")
+        .insert([{
+          customer_id: customer.id,
+          invoice_number: invoiceNumber,
+          invoice_number_key: invoiceNumberKey,
+          invoice_date: invoiceDate,
+          po_number: poNumber || null,
+          reference_info: referenceInfo || null,
+          total_amount: total,
+          paid_amount: 0,
+          balance_amount: total,
+          primary_status: "UNPAID",
+          payment_notice_status: "NONE",
+          created_by: state.currentProfile.id,
+          is_voided: false
+        }])
+        .select()
+        .single();
       if (error) return alert(error.message);
       const { error: itemError } = await supabaseClient.from("invoice_items").insert(items.map((i) => ({ ...i, invoice_id: data.id })));
       if (itemError) return alert(itemError.message);
