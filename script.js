@@ -261,7 +261,6 @@ generateSoaBtn: byId("generateSoaBtn"),
     el.proceedInvoiceSelectionBtn.addEventListener("click", proceedSelectedInvoices);
 
     el.closePartialPaymentModalBtn.addEventListener("click", () => closeModal(el.partialPaymentModal));
-    el.partialInvoiceSelect.addEventListener("change", renderPartialBalanceInfo);
     el.partialAmountInput.addEventListener("input", renderPartialBalanceInfo);
     el.proceedPartialPaymentBtn.addEventListener("click", proceedPartialPayment);
 
@@ -749,7 +748,43 @@ function renderCustomerContacts(customer) {
     el.sumOutstanding.textContent = formatPeso(totalOutstanding);
     el.sumOverdue.textContent = String(overdueCount);
   }
+  function buildOldestFirstAllocations(customer, amount) {
+    const openInvoices = (customer?.invoices || [])
+      .filter((inv) => Number(inv.balance || 0) > 0)
+      .slice()
+      .sort((a, b) => {
+        const dateCompare = String(a.invoice_date || "").localeCompare(String(b.invoice_date || ""));
+        if (dateCompare !== 0) return dateCompare;
+        return String(a.invoice_number || "").localeCompare(String(b.invoice_number || ""));
+      });
 
+    let remaining = round2(amount);
+    const allocations = [];
+
+    for (const invoice of openInvoices) {
+      if (remaining <= 0) break;
+
+      const invoiceBalance = round2(Number(invoice.balance || 0));
+      const appliedAmount = round2(Math.min(invoiceBalance, remaining));
+
+      if (appliedAmount > 0) {
+        allocations.push({
+          invoiceId: invoice.id,
+          invoiceNumber: invoice.invoice_number,
+          invoiceDate: invoice.invoice_date,
+          amount: appliedAmount,
+          remainingAfter: round2(invoiceBalance - appliedAmount)
+        });
+
+        remaining = round2(remaining - appliedAmount);
+      }
+    }
+
+    return {
+      allocations,
+      remaining
+    };
+  }
   function getAllocationAmount(alloc) {
     return Number(alloc?.allocated_amount ?? alloc?.amount ?? 0);
   }
@@ -1191,40 +1226,86 @@ function renderCustomerContacts(customer) {
     openPaymentMethodStep();
   }
 
-  function openPartialPaymentStep() {
+    function openPartialPaymentStep() {
     const customer = getSelectedCustomer();
     if (!customer) return;
+
+    const openInvoices = customer.invoices.filter((inv) => Number(inv.balance || 0) > 0);
+    if (!openInvoices.length) return alert("This customer has no open invoices.");
+
     closeModal(el.paymentTypeModal);
-    el.partialInvoiceSelect.innerHTML = customer.invoices.filter((inv) => inv.balance > 0).map((inv) => `<option value="${inv.id}">${escapeHtml(inv.invoice_number)} - Balance ${formatPeso(inv.balance)} - ${escapeHtml(inv.invoice_date)}</option>`).join("");
+    el.partialInvoiceSelect.innerHTML = `Auto-allocation uses oldest open invoices first. Open invoices: <strong>${openInvoices.length}</strong>`;
     el.partialAmountInput.value = "";
-    renderPartialBalanceInfo();
+    el.partialBalanceInfo.innerHTML = "Enter a payment amount to preview how it will be allocated.";
     openModal(el.partialPaymentModal);
   }
 
   function renderPartialBalanceInfo() {
     const customer = getSelectedCustomer();
     if (!customer) return;
-    const invoice = customer.invoices.find((inv) => inv.id === el.partialInvoiceSelect.value);
-    if (!invoice) {
-      el.partialBalanceInfo.textContent = "Select an invoice.";
+
+    const openInvoices = customer.invoices.filter((inv) => Number(inv.balance || 0) > 0);
+    if (!openInvoices.length) {
+      el.partialBalanceInfo.innerHTML = "No open invoices available.";
       return;
     }
-    const entered = num(el.partialAmountInput.value);
-    let text = `Current balance for ${invoice.invoice_number}: ${formatPeso(invoice.balance)}.`;
-    if (entered > 0) text += ` After this payment, remaining balance will be ${formatPeso(Math.max(0, invoice.balance - entered))}.`;
-    text += " The invoice remains Partially Paid until its balance becomes zero.";
-    el.partialBalanceInfo.textContent = text;
+
+    const totalOpenBalance = round2(openInvoices.reduce((sum, inv) => sum + Number(inv.balance || 0), 0));
+    const amount = num(el.partialAmountInput.value);
+
+    if (amount <= 0) {
+      el.partialBalanceInfo.innerHTML = `Total open balance: <strong>${formatPeso(totalOpenBalance)}</strong>. Enter a payment amount to preview allocation.`;
+      return;
+    }
+
+    if (amount > totalOpenBalance) {
+      el.partialBalanceInfo.innerHTML = `Entered amount <strong>${formatPeso(amount)}</strong> is more than the customer's total open balance of <strong>${formatPeso(totalOpenBalance)}</strong>.`;
+      return;
+    }
+
+    const result = buildOldestFirstAllocations(customer, amount);
+
+    const allocationLines = result.allocations.map((alloc) => `
+      <div>
+        ${escapeHtml(alloc.invoiceNumber)} (${escapeHtml(alloc.invoiceDate || "-")}) :
+        <strong>${formatPeso(alloc.amount)}</strong>
+        | Remaining on invoice: <strong>${formatPeso(alloc.remainingAfter)}</strong>
+      </div>
+    `).join("");
+
+    el.partialBalanceInfo.innerHTML = `
+      <div><strong>Total open balance:</strong> ${formatPeso(totalOpenBalance)}</div>
+      <div><strong>Payment amount:</strong> ${formatPeso(amount)}</div>
+      <div style="margin-top:10px;"><strong>Auto-allocation preview:</strong></div>
+      <div style="margin-top:8px;">${allocationLines || "No allocations generated."}</div>
+    `;
   }
 
   function proceedPartialPayment() {
     const customer = getSelectedCustomer();
     if (!customer) return;
-    const invoice = customer.invoices.find((inv) => inv.id === el.partialInvoiceSelect.value);
+
+    const openInvoices = customer.invoices.filter((inv) => Number(inv.balance || 0) > 0);
+    if (!openInvoices.length) return alert("This customer has no open invoices.");
+
+    const totalOpenBalance = round2(openInvoices.reduce((sum, inv) => sum + Number(inv.balance || 0), 0));
     const amount = num(el.partialAmountInput.value);
-    if (!invoice) return alert("Please choose an invoice.");
-    if (amount <= 0) return alert("Enter a valid partial amount.");
-    if (amount > invoice.balance) return alert("Partial amount cannot be more than the invoice balance.");
-    state.paymentDraft = { mode: "partial", amount, allocations: [{ invoiceId: invoice.id, amount }] };
+
+    if (amount <= 0) return alert("Enter a valid payment amount.");
+    if (amount > totalOpenBalance) return alert("Payment amount cannot be more than the customer's total open balance.");
+
+    const result = buildOldestFirstAllocations(customer, amount);
+    if (!result.allocations.length) return alert("No allocations were generated.");
+
+    state.paymentDraft = {
+      mode: "allocate",
+      amount,
+      allocations: result.allocations.map((alloc) => ({
+        invoiceId: alloc.invoiceId,
+        amount: alloc.amount
+      }))
+    };
+
     closeModal(el.partialPaymentModal);
     openPaymentMethodStep();
   }
@@ -1245,7 +1326,7 @@ function renderCustomerContacts(customer) {
       return `${invoice ? invoice.invoice_number : "Invoice"}: ${formatPeso(alloc.amount)}`;
     });
     el.paymentReviewBox.innerHTML = `
-      Payment Type: <strong>${state.paymentDraft.mode === "full" ? "Pay by Invoice" : "Partial Payment"}</strong><br>
+      Payment Type: <strong>${state.paymentDraft.mode === "full" ? "Pay by Invoice" : "Allocate Payment"}</strong><br>
       Amount: <strong>${formatPeso(state.paymentDraft.amount)}</strong><br>
       Applied To: ${escapeHtml(lines.join(" | "))}
     `;
@@ -1295,7 +1376,7 @@ function renderCustomerContacts(customer) {
     const { data: payment, error: paymentError } = await supabaseClient.from("payments").insert([{
       customer_id: customer.id,
       payment_date: paymentDate,
-      payment_type: state.paymentDraft.mode === "full" ? "Pay by Invoice" : "Partial Payment",
+      payment_type: state.paymentDraft.mode === "full" ? "Pay by Invoice" : "Allocate Payment",
       method: method,
       amount,
       details,
