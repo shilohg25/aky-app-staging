@@ -1865,7 +1865,7 @@ el.execOutstanding.textContent = formatCompactPeso(
     return {};
   }
 
-  function isReplacementPaymentEffective(payment) {
+    function isReplacementPaymentEffective(payment) {
     if (!payment) return false;
 
     if (payment.method === "Cheque") {
@@ -1875,7 +1875,7 @@ el.execOutstanding.textContent = formatCompactPeso(
     return true;
   }
 
-    function getReplacementStateForBouncedCheque(bouncedPayment) {
+  function getReplacementStateForBouncedCheque(bouncedPayment) {
     const originalItems = (bouncedPayment?.allocations || [])
       .map((alloc) => ({
         invoiceId: alloc.invoice_id,
@@ -1919,68 +1919,6 @@ el.execOutstanding.textContent = formatCompactPeso(
     const replacedByInvoice = new Map();
 
     allLinkedReplacementPayments
-      .filter(isReplacementPaymentEffective)
-      .forEach((payment) => {
-        (payment.allocations || []).forEach((alloc) => {
-          const amount = round2(getAllocationAmount(alloc));
-          const current = round2(replacedByInvoice.get(alloc.invoice_id) || 0);
-          replacedByInvoice.set(alloc.invoice_id, round2(current + amount));
-        });
-      });
-
-    const remainingItems = originalItems
-      .map((item) => {
-        const invoice = state.invoices.find((inv) => inv.id === item.invoiceId);
-        const alreadyReplaced = round2(replacedByInvoice.get(item.invoiceId) || 0);
-        const remainingAmount = round2(Math.max(0, item.originalAmount - alreadyReplaced));
-
-        return {
-          invoice,
-          invoiceId: item.invoiceId,
-          originalAmount: item.originalAmount,
-          alreadyReplaced,
-          remainingAmount
-        };
-      })
-      .filter((item) => item.invoice && item.remainingAmount > 0);
-
-    const remainingTotal = round2(
-      remainingItems.reduce((sum, item) => sum + item.remainingAmount, 0)
-    );
-
-    return {
-      originalTotal,
-      remainingTotal,
-      remainingItems,
-      isFullyReplaced: remainingTotal <= 0,
-      isPartiallyReplaced: remainingTotal > 0 && remainingTotal < originalTotal,
-      buttonLabel:
-        remainingTotal <= 0
-          ? "Replacement Recorded"
-          : remainingTotal < originalTotal
-            ? "Record Remaining Replacement"
-            : "Record Replacement"
-    };
-  }
-    const originalItems = (bouncedPayment?.allocations || [])
-      .map((alloc) => ({
-        invoiceId: alloc.invoice_id,
-        originalAmount: round2(getAllocationAmount(alloc))
-      }))
-      .filter((item) => item.originalAmount > 0);
-
-    const originalTotal = round2(
-      originalItems.reduce((sum, item) => sum + item.originalAmount, 0)
-    );
-
-    const linkedReplacementPayments = state.payments.filter((payment) => {
-      const details = getPaymentDetailsObject(payment);
-      return details.isReplacementPayment === true && details.replacesPaymentId === bouncedPayment.id;
-    });
-
-    const replacedByInvoice = new Map();
-
-    linkedReplacementPayments
       .filter(isReplacementPaymentEffective)
       .forEach((payment) => {
         (payment.allocations || []).forEach((alloc) => {
