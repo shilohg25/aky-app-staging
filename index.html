@@ -542,9 +542,9 @@
           <span>Choose one or more open invoices and pay their current balances.</span>
         </button>
         <button id="partialPaymentBtn" class="payment-choice-btn" type="button">
-          <strong>Partial Payment</strong>
-          <span>Apply part of a payment to a selected open invoice. The invoice remains Partially Paid until balance reaches zero.</span>
-        </button>
+  <strong>Allocate Payment</strong>
+  <span>Enter one payment amount and auto-allocate it to open invoices oldest first.</span>
+</button>
       </div>
     </div>
   </div>
@@ -567,27 +567,30 @@
   </div>
 
   <div id="partialPaymentModal" class="modal">
-    <div class="modal-content medium-modal">
-      <div class="modal-header">
-        <h3>Partial Payment</h3>
-        <button id="closePartialPaymentModalBtn" class="icon-btn" type="button">&times;</button>
+  <div class="modal-content medium-modal">
+    <div class="modal-header">
+      <h3>Allocate Payment</h3>
+      <button id="closePartialPaymentModalBtn" class="icon-btn" type="button">&times;</button>
+    </div>
+
+    <div class="form-grid one-col">
+      <div id="partialInvoiceSelect" class="info-box">
+        Auto-allocation uses oldest open invoices first.
       </div>
-      <div class="form-grid one-col">
-        <div class="field">
-          <label for="partialInvoiceSelect">Choose Invoice *</label>
-          <select id="partialInvoiceSelect"></select>
-        </div>
-        <div class="field">
-          <label for="partialAmountInput">Partial Amount *</label>
-          <input id="partialAmountInput" type="number" min="0" step="0.01" />
-        </div>
-        <div id="partialBalanceInfo" class="info-box"></div>
+
+      <div class="field">
+        <label for="partialAmountInput">Payment Amount *</label>
+        <input id="partialAmountInput" type="number" min="0" step="0.01" />
       </div>
-      <div class="modal-footer">
-        <button id="proceedPartialPaymentBtn" class="btn btn-primary" type="button">Proceed</button>
-      </div>
+
+      <div id="partialBalanceInfo" class="info-box"></div>
+    </div>
+
+    <div class="modal-footer">
+      <button id="proceedPartialPaymentBtn" class="btn btn-primary" type="button">Proceed</button>
     </div>
   </div>
+</div>
 
   <div id="paymentMethodModal" class="modal">
     <div class="modal-content medium-modal">
