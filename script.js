@@ -1355,8 +1355,9 @@ function renderCustomerContacts(customer) {
     openPaymentMethodStep();
   }
 
-  function openPaymentMethodStep() {
+    function openPaymentMethodStep() {
     if (!state.paymentDraft) return;
+
     el.paymentMethodSelect.value = "";
     el.chequeNumberInput.value = "";
     el.chequeDateInput.value = todayStr();
@@ -1365,16 +1366,31 @@ function renderCustomerContacts(customer) {
     el.onlinePlatformInput.value = "";
     el.cashBankAccountInput.value = "";
     renderPaymentMethodFields();
+
     const customer = getSelectedCustomer();
     const lines = state.paymentDraft.allocations.map((alloc) => {
       const invoice = customer.invoices.find((inv) => inv.id === alloc.invoiceId);
       return `${invoice ? invoice.invoice_number : "Invoice"}: ${formatPeso(alloc.amount)}`;
     });
+
+    const paymentTypeLabel =
+      state.paymentDraft.mode === "full"
+        ? "Pay by Invoice"
+        : state.paymentDraft.mode === "replacement"
+          ? "Replacement Payment"
+          : "Allocate Payment";
+
+    const replacementInfo =
+      state.paymentDraft.mode === "replacement"
+        ? `<br>Replaces Bounced Cheque: <strong>${escapeHtml(state.paymentDraft.replacementOfChequeNumber || "-")}</strong>`
+        : "";
+
     el.paymentReviewBox.innerHTML = `
-      Payment Type: <strong>${state.paymentDraft.mode === "full" ? "Pay by Invoice" : "Allocate Payment"}</strong><br>
+      Payment Type: <strong>${paymentTypeLabel}</strong><br>
       Amount: <strong>${formatPeso(state.paymentDraft.amount)}</strong><br>
-      Applied To: ${escapeHtml(lines.join(" | "))}
+      Applied To: ${escapeHtml(lines.join(" | "))}${replacementInfo}
     `;
+
     openModal(el.paymentMethodModal);
   }
 
@@ -1388,48 +1404,73 @@ function renderCustomerContacts(customer) {
     el.cashBankAccountWrap.classList.toggle("hidden", method !== "Cash");
   }
 
-  async function savePayment() {
+    async function savePayment() {
     const customer = getSelectedCustomer();
     if (!customer || !state.paymentDraft) return;
     if (!canCreatePayment()) return;
+
     const method = el.paymentMethodSelect.value;
     if (!method) return alert("Select a payment method.");
 
+    const isReplacementPayment = state.paymentDraft.mode === "replacement";
+
     const details = {};
     let cleared = true;
+
     if (method === "Cash") {
       details.bankAccountNumber = el.cashBankAccountInput.value.trim();
       if (!details.bankAccountNumber) return alert("Deposit bank account number is required.");
     }
+
     if (method === "Online") {
       details.referenceNumber = el.onlineReferenceInput.value.trim();
       details.platformName = el.onlinePlatformInput.value.trim();
       if (!details.referenceNumber) return alert("Online reference number is required.");
       if (!details.platformName) return alert("Platform / bank name is required.");
     }
+
     if (method === "Cheque") {
       details.chequeNumber = el.chequeNumberInput.value.trim();
       details.chequeDate = el.chequeDateInput.value;
       details.isPostDated = el.chequePostDatedInput.checked;
+
       if (!details.chequeNumber) return alert("Cheque number is required.");
       if (!details.chequeDate) return alert("Cheque date is required.");
+
       cleared = false;
+    }
+
+    if (isReplacementPayment) {
+      details.isReplacementPayment = true;
+      details.replacesPaymentId = state.paymentDraft.replacementOfPaymentId || null;
+      details.replacesChequeNumber = state.paymentDraft.replacementOfChequeNumber || null;
+      details.replacementOriginalAmount = state.paymentDraft.replacementOriginalAmount || null;
+      details.replacementAppliedAmount = round2(state.paymentDraft.amount || 0);
     }
 
     const paymentDate = todayStr();
     const amount = round2(state.paymentDraft.amount);
-    const { data: payment, error: paymentError } = await supabaseClient.from("payments").insert([{
-      customer_id: customer.id,
-      payment_date: paymentDate,
-      payment_type: state.paymentDraft.mode === "full" ? "Pay by Invoice" : "Partial Payment",
-      method: method,
-      amount,
-      details,
-      cleared,
-      created_by: state.currentProfile.id,
-      created_by_name: state.currentProfile.username,
-      created_by_role: state.currentProfile.role
-    }]).select().single();
+
+    const paymentType = state.paymentDraft.mode === "full"
+      ? "Pay by Invoice"
+      : "Partial Payment";
+
+    const { data: payment, error: paymentError } = await supabaseClient
+      .from("payments")
+      .insert([{
+        customer_id: customer.id,
+        payment_date: paymentDate,
+        payment_type: paymentType,
+        method,
+        amount,
+        details,
+        cleared,
+        created_by: state.currentProfile.id,
+        created_by_name: state.currentProfile.username,
+        created_by_role: state.currentProfile.role
+      }])
+      .select()
+      .single();
 
     if (paymentError) return alert(paymentError.message);
 
@@ -1439,16 +1480,25 @@ function renderCustomerContacts(customer) {
       allocated_amount: alloc.amount
     }));
 
-    const { error: allocError } = await supabaseClient.from("payment_allocations").insert(allocRows);
+    const { error: allocError } = await supabaseClient
+      .from("payment_allocations")
+      .insert(allocRows);
+
     if (allocError) return alert(allocError.message);
 
-        if (cleared) {
+    if (cleared) {
       for (const alloc of state.paymentDraft.allocations) {
         const invoice = state.invoices.find((x) => x.id === alloc.invoiceId);
         if (!invoice) continue;
+
         const newPaid = round2(Number(invoice.paidAmount || invoice.paid_amount || 0) + alloc.amount);
         const newBalance = round2(Math.max(0, Number(invoice.total || invoice.total_amount || 0) - newPaid));
-        const newStatus = newBalance <= 0 ? "PAID" : newBalance < Number(invoice.total || invoice.total_amount || 0) ? "PARTIALLY_PAID" : "UNPAID";
+        const newStatus = newBalance <= 0
+          ? "PAID"
+          : newBalance < Number(invoice.total || invoice.total_amount || 0)
+            ? "PARTIALLY_PAID"
+            : "UNPAID";
+
         const { error } = await supabaseClient
           .from("invoices")
           .update({
@@ -1462,16 +1512,25 @@ function renderCustomerContacts(customer) {
       }
     }
 
-    await addLog("Create", "Payment", `${payment.payment_type} - ${payment.method} - ${formatPeso(amount)}`, "", null, payment);
-        const successMessage = method === "Cheque"
-      ? "Cheque payment saved as pending clearance. Invoice balances were not changed."
-      : "Payment saved successfully.";
+    const logLabel = isReplacementPayment
+      ? `Replacement Payment - ${method} - ${formatPeso(amount)}`
+      : `${payment.payment_type} - ${payment.method} - ${formatPeso(amount)}`;
+
+    await addLog("Create", "Payment", logLabel, "", null, payment);
+
+    const successMessage = method === "Cheque"
+      ? isReplacementPayment
+        ? "Replacement cheque saved as pending clearance. The bounced cheque will stay actionable until this replacement cheque clears."
+        : "Cheque payment saved as pending clearance. Invoice balances were not changed."
+      : isReplacementPayment
+        ? "Replacement payment saved successfully."
+        : "Payment saved successfully.";
 
     state.paymentDraft = null;
     closeModal(el.paymentMethodModal);
     await refreshAndRenderAll();
     alert(successMessage);
-    }
+  }
 
   function renderPaymentTable(customer) {
     el.paymentTableBody.innerHTML = "";
@@ -1488,7 +1547,7 @@ function renderCustomerContacts(customer) {
       const row = document.createElement("tr");
       row.innerHTML = `
           <td>${escapeHtml(payment.payment_date)}</td>
-          <td>${escapeHtml(payment.payment_type)}</td>
+          <td>${escapeHtml(getPaymentTypeLabel(payment))}</td>
           <td>${escapeHtml(payment.method)}</td>
           <td>${details}</td>
           <td>${formatPeso(payment.amount)}</td>
@@ -1711,18 +1770,179 @@ el.execOutstanding.textContent = formatCompactPeso(
     await refreshAndRenderAll();
     alert("Cheque marked as bounced.");
   }
+  function getPaymentDetailsObject(payment) {
+    const raw = payment?.details;
 
-  function startChequeReplacement(customerId) {
-    if (!canManageChequeRegister()) return;
+    if (!raw) return {};
 
-    const customer = state.customers.find((c) => c.id === customerId);
-    if (!customer) return alert("Customer not found.");
+    if (typeof raw === "string") {
+      try {
+        return JSON.parse(raw);
+      } catch (error) {
+        return {};
+      }
+    }
 
-    state.selectedCustomerId = customerId;
-    renderCustomerList();
-    renderCurrentCustomerDashboard();
-    setView("customers");
-    openPaymentTypeModal();
+    if (typeof raw === "object" && !Array.isArray(raw)) {
+      return raw;
+    }
+
+    return {};
+  }
+
+  function isReplacementPaymentEffective(payment) {
+    if (!payment) return false;
+
+    if (payment.method === "Cheque") {
+      return payment.cleared === true && getChequeStatus(payment) === "Cleared";
+    }
+
+    return true;
+  }
+
+  function getReplacementStateForBouncedCheque(bouncedPayment) {
+    const originalItems = (bouncedPayment?.allocations || [])
+      .map((alloc) => ({
+        invoiceId: alloc.invoice_id,
+        originalAmount: round2(getAllocationAmount(alloc))
+      }))
+      .filter((item) => item.originalAmount > 0);
+
+    const originalTotal = round2(
+      originalItems.reduce((sum, item) => sum + item.originalAmount, 0)
+    );
+
+    const linkedReplacementPayments = state.payments.filter((payment) => {
+      const details = getPaymentDetailsObject(payment);
+      return details.isReplacementPayment === true && details.replacesPaymentId === bouncedPayment.id;
+    });
+
+    const replacedByInvoice = new Map();
+
+    linkedReplacementPayments
+      .filter(isReplacementPaymentEffective)
+      .forEach((payment) => {
+        (payment.allocations || []).forEach((alloc) => {
+          const amount = round2(getAllocationAmount(alloc));
+          const current = round2(replacedByInvoice.get(alloc.invoice_id) || 0);
+          replacedByInvoice.set(alloc.invoice_id, round2(current + amount));
+        });
+      });
+
+    const remainingItems = originalItems
+      .map((item) => {
+        const invoice = state.invoices.find((inv) => inv.id === item.invoiceId);
+        const alreadyReplaced = round2(replacedByInvoice.get(item.invoiceId) || 0);
+        const remainingAmount = round2(Math.max(0, item.originalAmount - alreadyReplaced));
+
+        return {
+          invoice,
+          invoiceId: item.invoiceId,
+          originalAmount: item.originalAmount,
+          alreadyReplaced,
+          remainingAmount
+        };
+      })
+      .filter((item) => item.invoice && item.remainingAmount > 0);
+
+    const remainingTotal = round2(
+      remainingItems.reduce((sum, item) => sum + item.remainingAmount, 0)
+    );
+
+    return {
+      originalTotal,
+      remainingTotal,
+      remainingItems,
+      isFullyReplaced: remainingTotal <= 0,
+      isPartiallyReplaced: remainingTotal > 0 && remainingTotal < originalTotal,
+      buttonLabel:
+        remainingTotal <= 0
+          ? "Replacement Recorded"
+          : remainingTotal < originalTotal
+            ? "Record Remaining Replacement"
+            : "Record Replacement"
+    };
+  }
+
+  function getPaymentTypeLabel(payment) {
+    const details = getPaymentDetailsObject(payment);
+    if (details.isReplacementPayment) return "Replacement Payment";
+    return payment.payment_type || "-";
+  }
+    function renderChequeRegisterView() {
+    if (!el.chequeRegisterTableBody) return;
+
+    const entries = getChequeRegisterEntries();
+    el.chequeRegisterTableBody.innerHTML = "";
+
+    if (!entries.length) {
+      el.chequeRegisterTableBody.innerHTML = `<tr><td colspan="9" class="muted">No cheque payments found.</td></tr>`;
+      return;
+    }
+
+    entries.forEach((entry) => {
+      const { payment, details, customer, status, appliedTo } = entry;
+      const row = document.createElement("tr");
+
+      let statusHtml = "-";
+      if (status === "Cleared") {
+        statusHtml = `<span class="status-pill status-paid">Cleared</span>`;
+      } else if (status === "Bounced") {
+        statusHtml = `<span class="notice-pill notice-pending">Bounced</span>`;
+      } else {
+        statusHtml = `<span class="notice-pill notice-postdated">Pending</span>`;
+      }
+
+      let actionHtml = `<span class="muted">View only</span>`;
+
+      if (canManageChequeRegister()) {
+        if (status === "Pending") {
+          actionHtml = `
+            <div class="row-actions">
+              <button class="btn btn-primary action-clear-cheque">Clear</button>
+              <button class="btn btn-danger action-bounce-cheque">Bounce</button>
+            </div>
+          `;
+        } else if (status === "Bounced") {
+          const replacementState = getReplacementStateForBouncedCheque(payment);
+
+          if (replacementState.isFullyReplaced) {
+            actionHtml = `<span class="muted">Replacement Recorded</span>`;
+          } else {
+            actionHtml = `
+              <div class="row-actions">
+                <button class="btn btn-secondary action-replace-cheque">${escapeHtml(replacementState.buttonLabel)}</button>
+              </div>
+            `;
+          }
+        } else {
+          actionHtml = `<span class="muted">Completed</span>`;
+        }
+      } else if (status === "Bounced") {
+        const replacementState = getReplacementStateForBouncedCheque(payment);
+        actionHtml = replacementState.isFullyReplaced
+          ? `<span class="muted">Replacement Recorded</span>`
+          : `<span class="muted">${escapeHtml(replacementState.buttonLabel)}</span>`;
+      }
+
+      row.innerHTML = `
+        <td>${escapeHtml(payment.payment_date || "-")}</td>
+        <td>${escapeHtml(customer?.name || "-")}</td>
+        <td>${escapeHtml(details.chequeNumber || "-")}</td>
+        <td>${escapeHtml(details.chequeDate || "-")}</td>
+        <td>${formatPeso(payment.amount)}</td>
+        <td>${escapeHtml(appliedTo || "-")}</td>
+        <td>${statusHtml}</td>
+        <td>${escapeHtml(payment.created_by_name || "-")}</td>
+        <td>${actionHtml}</td>
+      `;
+
+      row.querySelector(".action-clear-cheque")?.addEventListener("click", () => markChequeCleared(payment.id));
+      row.querySelector(".action-bounce-cheque")?.addEventListener("click", () => markChequeBounced(payment.id));
+      row.querySelector(".action-replace-cheque")?.addEventListener("click", () => startChequeReplacement(payment.id));
+
+      el.chequeRegisterTableBody.appendChild(row);
+    });
   }
   function renderChequeRegisterView() {
     if (!el.chequeRegisterTableBody) return;
@@ -2418,12 +2638,26 @@ function renderLogSortIndicators() {
   function openModal(node) { node.style.display = "flex"; }
   function closeModal(node) { node.style.display = "none"; }
 
-  function formatPaymentDetails(payment) {
-    const details = payment.details || {};
-    if (payment.method === "Cash") return escapeHtml(`Deposit to: ${details.bankAccountNumber || "-"}`);
-    if (payment.method === "Online") return escapeHtml(`Ref: ${details.referenceNumber || "-"} | ${details.platformName || "-"}`);
-    if (payment.method === "Cheque") return escapeHtml(`Cheque #: ${details.chequeNumber || "-"} | Date: ${details.chequeDate || "-"}${details.isPostDated ? " | Post-Dated" : ""}`);
-    return "-";
+    function formatPaymentDetails(payment) {
+    const details = getPaymentDetailsObject(payment);
+
+    const replacementText = details.isReplacementPayment
+      ? ` | Replaces bounced cheque #${details.replacesChequeNumber || "-"}`
+      : "";
+
+    if (payment.method === "Cash") {
+      return escapeHtml(`Deposit to: ${details.bankAccountNumber || "-"}${replacementText}`);
+    }
+
+    if (payment.method === "Online") {
+      return escapeHtml(`Ref: ${details.referenceNumber || "-"} | ${details.platformName || "-"}${replacementText}`);
+    }
+
+    if (payment.method === "Cheque") {
+      return escapeHtml(`Cheque #: ${details.chequeNumber || "-"} | Date: ${details.chequeDate || "-"}${details.isPostDated ? " | Post-Dated" : ""}${replacementText}`);
+    }
+
+    return replacementText ? escapeHtml(replacementText.replace(/^ \| /, "")) : "-";
   }
 
   function statusPill(status) {
