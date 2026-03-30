@@ -1944,7 +1944,7 @@ el.execOutstanding.textContent = formatCompactPeso(
       el.chequeRegisterTableBody.appendChild(row);
     });
   }
-  function renderChequeRegisterView() {
+    function renderChequeRegisterView() {
     if (!el.chequeRegisterTableBody) return;
 
     const entries = getChequeRegisterEntries();
@@ -1960,7 +1960,7 @@ el.execOutstanding.textContent = formatCompactPeso(
       const row = document.createElement("tr");
 
       let statusHtml = "-";
-            if (status === "Cleared") {
+      if (status === "Cleared") {
         statusHtml = `<span class="status-pill status-paid">Cleared</span>`;
       } else if (status === "Bounced") {
         statusHtml = `<span class="notice-pill notice-pending">Bounced</span>`;
@@ -1968,7 +1968,7 @@ el.execOutstanding.textContent = formatCompactPeso(
         statusHtml = `<span class="notice-pill notice-postdated">Pending</span>`;
       }
 
-            let actionHtml = `<span class="muted">View only</span>`;
+      let actionHtml = `<span class="muted">View only</span>`;
 
       if (canManageChequeRegister()) {
         if (status === "Pending") {
@@ -1979,14 +1979,25 @@ el.execOutstanding.textContent = formatCompactPeso(
             </div>
           `;
         } else if (status === "Bounced") {
-          actionHtml = `
-            <div class="row-actions">
-              <button class="btn btn-secondary action-replace-cheque">Record Replacement</button>
-            </div>
-          `;
+          const replacementState = getReplacementStateForBouncedCheque(payment);
+
+          if (replacementState.isFullyReplaced) {
+            actionHtml = `<span class="muted">Replacement Recorded</span>`;
+          } else {
+            actionHtml = `
+              <div class="row-actions">
+                <button class="btn btn-secondary action-replace-cheque">${escapeHtml(replacementState.buttonLabel)}</button>
+              </div>
+            `;
+          }
         } else {
           actionHtml = `<span class="muted">Completed</span>`;
         }
+      } else if (status === "Bounced") {
+        const replacementState = getReplacementStateForBouncedCheque(payment);
+        actionHtml = replacementState.isFullyReplaced
+          ? `<span class="muted">Replacement Recorded</span>`
+          : `<span class="muted">${escapeHtml(replacementState.buttonLabel)}</span>`;
       }
 
       row.innerHTML = `
@@ -2001,9 +2012,9 @@ el.execOutstanding.textContent = formatCompactPeso(
         <td>${actionHtml}</td>
       `;
 
-            row.querySelector(".action-clear-cheque")?.addEventListener("click", () => markChequeCleared(payment.id));
+      row.querySelector(".action-clear-cheque")?.addEventListener("click", () => markChequeCleared(payment.id));
       row.querySelector(".action-bounce-cheque")?.addEventListener("click", () => markChequeBounced(payment.id));
-      row.querySelector(".action-replace-cheque")?.addEventListener("click", () => startChequeReplacement(payment.customer_id));
+      row.querySelector(".action-replace-cheque")?.addEventListener("click", () => startChequeReplacement(payment.id));
 
       el.chequeRegisterTableBody.appendChild(row);
     });
