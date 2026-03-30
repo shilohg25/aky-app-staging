@@ -1869,7 +1869,50 @@ el.execOutstanding.textContent = formatCompactPeso(
     if (details.isReplacementPayment) return "Replacement Payment";
     return payment.payment_type || "-";
   }
-    
+      function startChequeReplacement(paymentId) {
+    if (!canManageChequeRegister()) return;
+
+    const bouncedPayment = state.payments.find((p) => p.id === paymentId);
+    if (!bouncedPayment) return alert("Bounced cheque payment not found.");
+
+    if (getChequeStatus(bouncedPayment) !== "Bounced") {
+      return alert("Only bounced cheques can use replacement flow.");
+    }
+
+    const replacementState = getReplacementStateForBouncedCheque(bouncedPayment);
+    if (replacementState.isFullyReplaced) {
+      return alert("This bounced cheque is already fully replaced.");
+    }
+
+    const customer = state.customers.find((c) => c.id === bouncedPayment.customer_id);
+    if (!customer) return alert("Customer not found.");
+
+    const bouncedDetails = getPaymentDetailsObject(bouncedPayment);
+
+    state.selectedCustomerId = customer.id;
+    renderCustomerList();
+    renderCurrentCustomerDashboard();
+    setView("customers");
+
+    state.paymentDraft = {
+      mode: "replacement",
+      amount: replacementState.remainingTotal,
+      allocations: replacementState.remainingItems.map((item) => ({
+        invoiceId: item.invoiceId,
+        amount: item.remainingAmount
+      })),
+      replacementOfPaymentId: bouncedPayment.id,
+      replacementOfChequeNumber: bouncedDetails.chequeNumber || "",
+      replacementOriginalAmount: replacementState.originalTotal,
+      replacementRemainingAmount: replacementState.remainingTotal
+    };
+
+    closeModal(el.paymentTypeModal);
+    closeModal(el.invoiceSelectionModal);
+    closeModal(el.partialPaymentModal);
+
+    openPaymentMethodStep();
+  }
       function renderChequeRegisterView() {
     if (!el.chequeRegisterTableBody) return;
 
