@@ -1580,6 +1580,150 @@ el.execOutstanding.textContent = formatCompactPeso(
     body = panel.querySelector("#postDatedChequesBody");
     return body;
   }
+    async function markChequeCleared(paymentId) {
+    if (!canManageChequeRegister()) return;
+
+    const payment = state.payments.find((p) => p.id === paymentId);
+    if (!payment) return alert("Cheque payment not found.");
+
+    const status = getChequeStatus(payment);
+    if (status !== "Pending") return alert("Only pending cheques can be cleared.");
+
+    const confirmed = window.confirm("Mark this cheque as cleared?");
+    if (!confirmed) return;
+
+    for (const alloc of payment.allocations || []) {
+      const invoice = state.invoices.find((inv) => inv.id === alloc.invoice_id);
+      if (!invoice) continue;
+
+      const invoiceTotal = Number(invoice.total || invoice.total_amount || 0);
+      const currentPaid = Number(invoice.paidAmount || invoice.paid_amount || 0);
+      const allocAmount = getAllocationAmount(alloc);
+
+      if (round2(currentPaid + allocAmount) > round2(invoiceTotal)) {
+        return alert(
+          `Cannot clear this cheque because invoice ${invoice.invoice_number || ""} would exceed its total. ` +
+          `This cheque may have been recorded under the old logic and needs owner review first.`
+        );
+      }
+    }
+
+    for (const alloc of payment.allocations || []) {
+      const invoice = state.invoices.find((inv) => inv.id === alloc.invoice_id);
+      if (!invoice) continue;
+
+      const invoiceTotal = Number(invoice.total || invoice.total_amount || 0);
+      const currentPaid = Number(invoice.paidAmount || invoice.paid_amount || 0);
+      const allocAmount = getAllocationAmount(alloc);
+
+      const newPaid = round2(currentPaid + allocAmount);
+      const newBalance = round2(Math.max(0, invoiceTotal - newPaid));
+      const newStatus = newBalance <= 0 ? "PAID" : newBalance < invoiceTotal ? "PARTIALLY_PAID" : "UNPAID";
+
+      const { error: invoiceError } = await supabaseClient
+        .from("invoices")
+        .update({
+          paid_amount: newPaid,
+          balance_amount: newBalance,
+          primary_status: newStatus
+        })
+        .eq("id", alloc.invoice_id);
+
+      if (invoiceError) return alert(invoiceError.message);
+    }
+
+    const updatedDetails = {
+      ...(payment.details || {}),
+      clearedAt: new Date().toISOString(),
+      clearedBy: state.currentProfile?.id || null,
+      clearedByName: state.currentProfile?.username || state.currentProfile?.email || "User",
+      bouncedAt: null,
+      bouncedBy: null,
+      bouncedByName: null,
+      bounceReason: null
+    };
+
+    const { error: paymentError } = await supabaseClient
+      .from("payments")
+      .update({
+        cleared: true,
+        details: updatedDetails
+      })
+      .eq("id", paymentId);
+
+    if (paymentError) return alert(paymentError.message);
+
+    await addLog(
+      "Clear",
+      "Cheque Payment",
+      `${payment.payment_type} - Cheque - ${formatPeso(payment.amount)}`,
+      "Cheque marked as cleared",
+      payment,
+      { payment_id: paymentId, status: "CLEARED" }
+    );
+
+    await refreshAndRenderAll();
+    alert("Cheque marked as cleared.");
+  }
+
+  async function markChequeBounced(paymentId) {
+    if (!canManageChequeRegister()) return;
+
+    const payment = state.payments.find((p) => p.id === paymentId);
+    if (!payment) return alert("Cheque payment not found.");
+
+    const status = getChequeStatus(payment);
+    if (status !== "Pending") return alert("Only pending cheques can be marked as bounced.");
+
+    const reason = window.prompt("Enter bounce reason:", "Insufficient funds");
+    if (reason === null) return;
+
+    const updatedDetails = {
+      ...(payment.details || {}),
+      bouncedAt: new Date().toISOString(),
+      bouncedBy: state.currentProfile?.id || null,
+      bouncedByName: state.currentProfile?.username || state.currentProfile?.email || "User",
+      bounceReason: reason.trim() || "No reason provided",
+      clearedAt: null,
+      clearedBy: null,
+      clearedByName: null
+    };
+
+    const { error } = await supabaseClient
+      .from("payments")
+      .update({
+        cleared: false,
+        details: updatedDetails
+      })
+      .eq("id", paymentId);
+
+    if (error) return alert(error.message);
+
+    await addLog(
+      "Bounce",
+      "Cheque Payment",
+      `${payment.payment_type} - Cheque - ${formatPeso(payment.amount)}`,
+      updatedDetails.bounceReason,
+      payment,
+      { payment_id: paymentId, status: "BOUNCED" }
+    );
+
+    await refreshAndRenderAll();
+    alert("Cheque marked as bounced.");
+  }
+
+  function startChequeReplacement(customerId) {
+    if (!canManageChequeRegister()) return;
+
+    const customer = state.customers.find((c) => c.id === customerId);
+    if (!customer) return alert("Customer not found.");
+
+    state.selectedCustomerId = customerId;
+    renderCustomerList();
+    renderCurrentCustomerDashboard();
+    setView("customers");
+    openPaymentTypeModal();
+  }
   function renderChequeRegisterView() {
     if (!el.chequeRegisterTableBody) return;
 
@@ -1596,7 +1740,7 @@ el.execOutstanding.textContent = formatCompactPeso(
       const row = document.createElement("tr");
 
       let statusHtml = "-";
-      if (status === "Cleared") {
+            if (status === "Cleared") {
         statusHtml = `<span class="status-pill status-paid">Cleared</span>`;
       } else if (status === "Bounced") {
         statusHtml = `<span class="notice-pill notice-pending">Bounced</span>`;
@@ -1604,9 +1748,26 @@ el.execOutstanding.textContent = formatCompactPeso(
         statusHtml = `<span class="notice-pill notice-postdated">Pending</span>`;
       }
 
-      const actionHtml = canManageChequeRegister()
-        ? `<span class="muted">Actions coming next</span>`
-        : `<span class="muted">View only</span>`;
+            let actionHtml = `<span class="muted">View only</span>`;
+
+      if (canManageChequeRegister()) {
+        if (status === "Pending") {
+          actionHtml = `
+            <div class="row-actions">
+              <button class="btn btn-primary action-clear-cheque">Clear</button>
+              <button class="btn btn-danger action-bounce-cheque">Bounce</button>
+            </div>
+          `;
+        } else if (status === "Bounced") {
+          actionHtml = `
+            <div class="row-actions">
+              <button class="btn btn-secondary action-replace-cheque">Record Replacement</button>
+            </div>
+          `;
+        } else {
+          actionHtml = `<span class="muted">Completed</span>`;
+        }
+      }
 
       row.innerHTML = `
         <td>${escapeHtml(payment.payment_date || "-")}</td>
@@ -1619,6 +1780,10 @@ el.execOutstanding.textContent = formatCompactPeso(
         <td>${escapeHtml(payment.created_by_name || "-")}</td>
         <td>${actionHtml}</td>
       `;
+
+            row.querySelector(".action-clear-cheque")?.addEventListener("click", () => markChequeCleared(payment.id));
+      row.querySelector(".action-bounce-cheque")?.addEventListener("click", () => markChequeBounced(payment.id));
+      row.querySelector(".action-replace-cheque")?.addEventListener("click", () => startChequeReplacement(payment.customer_id));
 
       el.chequeRegisterTableBody.appendChild(row);
     });
