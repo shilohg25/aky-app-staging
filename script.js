@@ -363,10 +363,11 @@ el.generateSoaBtn.addEventListener("click", generateSoa);
     renderCurrentUser();
     await loadAllData();
     if (canManageAccounts()) await loadAccounts();
-    renderCustomerList();
+        renderCustomerList();
     renderCurrentCustomerDashboard();
     renderExecutiveView();
     renderNotificationsView();
+    renderChequeRegisterView();
     renderLogs();
     renderReportsView();
     renderAccountsView();
@@ -793,6 +794,41 @@ function renderCustomerContacts(customer) {
       allocations,
       remaining
     };
+  }
+    function getChequeStatus(payment) {
+    const details = payment?.details || {};
+
+    if (details.bouncedAt || details.bounceReason) return "Bounced";
+    if (payment.cleared === true) return "Cleared";
+    return "Pending";
+  }
+
+  function canManageChequeRegister() {
+    const role = state.currentProfile?.role || "";
+    return role === "owner" || role === "admin";
+  }
+
+  function getChequeRegisterEntries() {
+    return state.payments
+      .filter((payment) => payment.method === "Cheque")
+      .map((payment) => {
+        const details = payment.details || {};
+        const customer = state.customers.find((c) => c.id === payment.customer_id);
+
+        const appliedTo = (payment.allocations || []).map((alloc) => {
+          const invoice = state.invoices.find((inv) => inv.id === alloc.invoice_id);
+          return `${getInvoiceReferenceLabel(invoice)} (${formatPeso(getAllocationAmount(alloc))})`;
+        }).join(", ");
+
+        return {
+          payment,
+          details,
+          customer,
+          status: getChequeStatus(payment),
+          appliedTo
+        };
+      })
+      .sort((a, b) => String(b.payment.payment_date || "").localeCompare(String(a.payment.payment_date || "")));
   }
   function getAllocationAmount(alloc) {
     return Number(alloc?.allocated_amount ?? alloc?.amount ?? 0);
@@ -1544,7 +1580,49 @@ el.execOutstanding.textContent = formatCompactPeso(
     body = panel.querySelector("#postDatedChequesBody");
     return body;
   }
+  function renderChequeRegisterView() {
+    if (!el.chequeRegisterTableBody) return;
 
+    const entries = getChequeRegisterEntries();
+    el.chequeRegisterTableBody.innerHTML = "";
+
+    if (!entries.length) {
+      el.chequeRegisterTableBody.innerHTML = `<tr><td colspan="9" class="muted">No cheque payments found.</td></tr>`;
+      return;
+    }
+
+    entries.forEach((entry) => {
+      const { payment, details, customer, status, appliedTo } = entry;
+      const row = document.createElement("tr");
+
+      let statusHtml = "-";
+      if (status === "Cleared") {
+        statusHtml = `<span class="status-pill status-paid">Cleared</span>`;
+      } else if (status === "Bounced") {
+        statusHtml = `<span class="notice-pill notice-pending">Bounced</span>`;
+      } else {
+        statusHtml = `<span class="notice-pill notice-postdated">Pending</span>`;
+      }
+
+      const actionHtml = canManageChequeRegister()
+        ? `<span class="muted">Actions coming next</span>`
+        : `<span class="muted">View only</span>`;
+
+      row.innerHTML = `
+        <td>${escapeHtml(payment.payment_date || "-")}</td>
+        <td>${escapeHtml(customer?.name || "-")}</td>
+        <td>${escapeHtml(details.chequeNumber || "-")}</td>
+        <td>${escapeHtml(details.chequeDate || "-")}</td>
+        <td>${formatPeso(payment.amount)}</td>
+        <td>${escapeHtml(appliedTo || "-")}</td>
+        <td>${statusHtml}</td>
+        <td>${escapeHtml(payment.created_by_name || "-")}</td>
+        <td>${actionHtml}</td>
+      `;
+
+      el.chequeRegisterTableBody.appendChild(row);
+    });
+  }
   function renderNotificationsView() {
     if (!canViewNotifications()) return;
     el.tbvTableBody.innerHTML = "";
@@ -2162,10 +2240,11 @@ function renderLogSortIndicators() {
   async function refreshAndRenderAll() {
     await loadAllData();
     if (canManageAccounts()) await loadAccounts();
-    renderCustomerList();
+        renderCustomerList();
     renderCurrentCustomerDashboard();
     renderExecutiveView();
     renderNotificationsView();
+    renderChequeRegisterView();
     renderLogs();
     renderReportsView();
     renderAccountsView();
