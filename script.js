@@ -21,18 +21,20 @@ const { supabaseClient, ACCOUNT_ADMIN_FUNCTION_URL, ROLE_PERMISSIONS, state } = 
       logoutBtn: byId("logoutBtn"),
 
       navCustomers: byId("navCustomers"),
-      navExecutive: byId("navExecutive"),
-      navNotifications: byId("navNotifications"),
-      navReports: byId("navReports"),
-      navLogs: byId("navLogs"),
-      navAccounts: byId("navAccounts"),
+navExecutive: byId("navExecutive"),
+navNotifications: byId("navNotifications"),
+navChequeRegister: byId("navChequeRegister"),
+navReports: byId("navReports"),
+navLogs: byId("navLogs"),
+navAccounts: byId("navAccounts"),
 
       customersView: byId("customersView"),
-      executiveView: byId("executiveView"),
-      notificationsView: byId("notificationsView"),
-      reportsView: byId("reportsView"),
-      logView: byId("logView"),
-      accountsView: byId("accountsView"),
+executiveView: byId("executiveView"),
+notificationsView: byId("notificationsView"),
+chequeRegisterView: byId("chequeRegisterView"),
+reportsView: byId("reportsView"),
+logView: byId("logView"),
+accountsView: byId("accountsView"),
 
       customerList: byId("customerList"),
       customerSearch: byId("customerSearch"),
@@ -165,6 +167,7 @@ const { supabaseClient, ACCOUNT_ADMIN_FUNCTION_URL, ROLE_PERMISSIONS, state } = 
       reportTotalOutstanding: byId("reportTotalOutstanding"),
 
       logTableBody: byId("logTableBody"),
+chequeRegisterTableBody: byId("chequeRegisterTableBody"),
 
       tbvModal: byId("tbvModal"),
       closeTbvModalBtn: byId("closeTbvModalBtn"),
@@ -226,9 +229,10 @@ generateSoaBtn: byId("generateSoaBtn"),
     el.logoutBtn.addEventListener("click", logout);
 
     el.navCustomers.addEventListener("click", () => setView("customers"));
-    el.navExecutive.addEventListener("click", () => setView("executive"));
-    el.navNotifications.addEventListener("click", () => setView("notifications"));
-    el.navReports.addEventListener("click", () => setView("reports"));
+el.navExecutive.addEventListener("click", () => setView("executive"));
+el.navNotifications.addEventListener("click", () => setView("notifications"));
+el.navChequeRegister.addEventListener("click", () => setView("cheque-register"));
+el.navReports.addEventListener("click", () => setView("reports"));
     el.navLogs.addEventListener("click", () => setView("logs"));
     el.navAccounts.addEventListener("click", () => setView("accounts"));
 
@@ -603,8 +607,8 @@ el.generateSoaBtn.addEventListener("click", generateSoa);
   function setView(view) {
     state.currentView = view;
 
-    [el.customersView, el.executiveView, el.notificationsView, el.reportsView, el.logView, el.accountsView].forEach((v) => v.classList.add("hidden"));
-    [el.navCustomers, el.navExecutive, el.navNotifications, el.navReports, el.navLogs, el.navAccounts].forEach((b) => b.classList.remove("active"));
+    [el.customersView, el.executiveView, el.notificationsView, el.chequeRegisterView, el.reportsView, el.logView, el.accountsView].forEach((v) => v.classList.add("hidden"));
+[el.navCustomers, el.navExecutive, el.navNotifications, el.navChequeRegister, el.navReports, el.navLogs, el.navAccounts].forEach((b) => b.classList.remove("active"));
 
     if (view === "customers") {
       el.customersView.classList.remove("hidden");
@@ -621,6 +625,11 @@ el.generateSoaBtn.addEventListener("click", generateSoa);
       el.navNotifications.classList.add("active");
       return;
     }
+    if (view === "cheque-register") {
+  el.chequeRegisterView.classList.remove("hidden");
+  el.navChequeRegister.classList.add("active");
+  return;
+}
     if (view === "reports") {
       el.reportsView.classList.remove("hidden");
       el.navReports.classList.add("active");
