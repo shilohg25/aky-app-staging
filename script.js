@@ -1282,13 +1282,16 @@ function renderCustomerContacts(customer) {
     if (el.invoiceDiscountReason) el.invoiceDiscountReason.value = "";
   }
 
-  function getInvoiceEditorState() {
+    function getInvoiceEditorState() {
     const customer = getSelectedCustomer();
-    const discountAuthorized = canUseInvoiceDiscount(customer);
+    const discountAuthorized = !!customer?.discount_authorized;
     const discountEnabled = discountAuthorized && !!el.invoiceDiscountEnabled?.checked;
     const discountMode = discountEnabled
       ? (el.invoiceDiscountMode?.value === "fixed" ? "fixed" : "per_qty")
       : "none";
+
+    const capAmount = round2(Number(customer?.discount_max_amount || 0));
+    const rawFixedDiscount = round2(num(el.invoiceDiscountFixedAmount?.value));
 
     const parsedRows = [...el.lineItemsContainer.querySelectorAll(".line-item")].map((row) => {
       const product_name = row.querySelector(".line-product")?.value.trim() || "";
@@ -1297,8 +1300,13 @@ function renderCustomerContacts(customer) {
       const rawDiscountPerQty = round2(num(row.querySelector(".line-discount-per-qty")?.value));
 
       const line_subtotal = round2(qty * unit_price);
-      const effectiveDiscountPerQty = discountMode === "per_qty" ? rawDiscountPerQty : 0;
-      const line_discount_total = round2(Math.min(line_subtotal, qty * effectiveDiscountPerQty));
+      const discount_per_qty =
+        discountEnabled && discountMode === "per_qty" ? rawDiscountPerQty : 0;
+
+      const line_discount_total = round2(
+        Math.min(line_subtotal, qty * discount_per_qty)
+      );
+
       const line_total = round2(Math.max(0, line_subtotal - line_discount_total));
 
       return {
@@ -1306,8 +1314,7 @@ function renderCustomerContacts(customer) {
         product_name,
         qty,
         unit_price,
-        rawDiscountPerQty,
-        discount_per_qty: effectiveDiscountPerQty,
+        discount_per_qty,
         line_subtotal,
         line_discount_total,
         line_total
@@ -1315,27 +1322,21 @@ function renderCustomerContacts(customer) {
     });
 
     const items = parsedRows.filter((item) =>
-      item.product_name || item.qty || item.unit_price || item.rawDiscountPerQty
+      item.product_name || item.qty || item.unit_price || item.discount_per_qty
     );
 
     const subtotalAmount = round2(items.reduce((sum, item) => sum + item.line_subtotal, 0));
     const lineDiscountTotal = round2(items.reduce((sum, item) => sum + item.line_discount_total, 0));
 
-    let invoiceDiscountAmount = discountMode === "fixed"
-      ? round2(num(el.invoiceDiscountFixedAmount?.value))
-      : 0;
-
     const maxFixedAllowed = round2(Math.max(0, subtotalAmount - lineDiscountTotal));
-    if (invoiceDiscountAmount > maxFixedAllowed) {
-      invoiceDiscountAmount = maxFixedAllowed;
-    }
+    const invoiceDiscountAmount =
+      discountEnabled && discountMode === "fixed"
+        ? round2(Math.min(rawFixedDiscount, maxFixedAllowed))
+        : 0;
 
     const discountTotalAmount = round2(lineDiscountTotal + invoiceDiscountAmount);
     const totalAmount = round2(Math.max(0, subtotalAmount - discountTotalAmount));
-    const capAmount = round2(Number(customer?.discount_max_amount || 0));
     const discountReason = discountEnabled ? (el.invoiceDiscountReason?.value.trim() || "") : "";
-    const exceedsCap = discountEnabled && discountTotalAmount > capAmount;
-    const isDiscountApplied = discountEnabled && discountTotalAmount > 0;
 
     return {
       customer,
@@ -1351,8 +1352,8 @@ function renderCustomerContacts(customer) {
       totalAmount,
       capAmount,
       discountReason,
-      exceedsCap,
-      isDiscountApplied
+      exceedsCap: discountEnabled && discountTotalAmount > capAmount,
+      isDiscountApplied: discountEnabled && discountTotalAmount > 0
     };
   }
 
@@ -1406,38 +1407,23 @@ function renderCustomerContacts(customer) {
       Customer Discount Cap: <strong>${formatPeso(editorState.capAmount)}</strong> | ${capStatus}
     `;
   }
-      function addLineItemRow(item = {}) {
-    const customer = getSelectedCustomer();
-    const canDiscount = !!customer?.discount_authorized;
-
+        function addLineItemRow(item = {}) {
     const row = document.createElement("div");
     row.className = "line-item";
     row.innerHTML = `
       <input type="text" class="line-product" placeholder="Product name" value="${escapeAttr(item.product || "")}">
       <input type="number" class="line-qty" placeholder="Qty" min="0" step="0.01" value="${item.qty ?? ""}">
       <input type="number" class="line-price" placeholder="Price" min="0" step="0.01" value="${item.price ?? ""}">
-      <input
-        type="number"
-        class="line-discount-per-qty"
-        placeholder="Discount / Qty"
-        min="0"
-        step="0.01"
-        value="${item.discountPerQty ?? ""}"
-        ${canDiscount ? "" : "disabled"}
-      >
+      <input type="number" class="line-discount-per-qty" placeholder="0.00" min="0" step="0.01" value="${item.discountPerQty ?? 0}">
       <div class="line-total-box">₱0</div>
       <button type="button" class="delete-line-btn">&times;</button>
     `;
 
-    const qtyInput = row.querySelector(".line-qty");
-    const priceInput = row.querySelector(".line-price");
-    const discountInput = row.querySelector(".line-discount-per-qty");
-
     const recalc = () => updateInvoiceTotal();
 
-    qtyInput.addEventListener("input", recalc);
-    priceInput.addEventListener("input", recalc);
-    discountInput.addEventListener("input", recalc);
+    row.querySelector(".line-qty").addEventListener("input", recalc);
+    row.querySelector(".line-price").addEventListener("input", recalc);
+    row.querySelector(".line-discount-per-qty").addEventListener("input", recalc);
 
     row.querySelector(".delete-line-btn").addEventListener("click", () => {
       row.remove();
@@ -1465,56 +1451,6 @@ function renderCustomerContacts(customer) {
 
     return box;
   }
-
-  function getInvoiceEditorState() {
-    const customer = getSelectedCustomer();
-    const discountAuthorized = !!customer?.discount_authorized;
-    const capAmount = round2(Number(customer?.discount_max_amount || 0));
-
-    const parsedRows = [...el.lineItemsContainer.querySelectorAll(".line-item")].map((row) => {
-      const product_name = row.querySelector(".line-product")?.value.trim() || "";
-      const qty = num(row.querySelector(".line-qty")?.value);
-      const unit_price = num(row.querySelector(".line-price")?.value);
-      const rawDiscountPerQty = round2(num(row.querySelector(".line-discount-per-qty")?.value));
-
-      const discount_per_qty = discountAuthorized ? rawDiscountPerQty : 0;
-      const line_subtotal = round2(qty * unit_price);
-      const line_discount_total = round2(Math.min(line_subtotal, qty * discount_per_qty));
-      const line_total = round2(Math.max(0, line_subtotal - line_discount_total));
-
-      return {
-        row,
-        product_name,
-        qty,
-        unit_price,
-        discount_per_qty,
-        line_subtotal,
-        line_discount_total,
-        line_total
-      };
-    });
-
-    const items = parsedRows.filter((item) =>
-      item.product_name || item.qty || item.unit_price || item.discount_per_qty
-    );
-
-    const subtotalAmount = round2(items.reduce((sum, item) => sum + item.line_subtotal, 0));
-    const discountTotalAmount = round2(items.reduce((sum, item) => sum + item.line_discount_total, 0));
-    const totalAmount = round2(Math.max(0, subtotalAmount - discountTotalAmount));
-
-    return {
-      customer,
-      discountAuthorized,
-      capAmount,
-      parsedRows,
-      items,
-      subtotalAmount,
-      discountTotalAmount,
-      totalAmount,
-      exceedsCap: discountAuthorized && discountTotalAmount > capAmount
-    };
-  }
-
   function renderInvoiceDiscountBreakdown(editorState) {
     const box = getInvoiceDiscountBreakdownBox();
     if (!box) return;
@@ -1539,17 +1475,51 @@ function renderCustomerContacts(customer) {
       Customer Discount Cap: <strong>${formatPeso(editorState.capAmount)}</strong> | ${capNote}
     `;
   }
-      function updateInvoiceTotal() {
+        function updateInvoiceTotal() {
     const editorState = getInvoiceEditorState();
 
+    const usePerQtyDiscount =
+      editorState.discountAuthorized &&
+      editorState.discountEnabled &&
+      editorState.discountMode === "per_qty";
+
     editorState.parsedRows.forEach((item) => {
+      const discountInput = item.row.querySelector(".line-discount-per-qty");
       const totalBox = item.row.querySelector(".line-total-box");
+
+      if (discountInput) {
+        discountInput.disabled = !usePerQtyDiscount;
+        if (!usePerQtyDiscount) {
+          discountInput.value = "0";
+        }
+      }
+
       if (totalBox) {
         totalBox.textContent = formatPeso(item.line_total);
       }
     });
 
-    renderInvoiceDiscountBreakdown(editorState);
+    if (
+      el.invoiceDiscountFixedAmount &&
+      editorState.discountEnabled &&
+      editorState.discountMode === "fixed"
+    ) {
+      el.invoiceDiscountFixedAmount.value = editorState.invoiceDiscountAmount || "";
+    }
+
+    if (el.invoiceDiscountSummary) {
+      const capStatus = editorState.exceedsCap
+        ? `<span style="color:#c73636;"><strong>Over cap by ${formatPeso(editorState.discountTotalAmount - editorState.capAmount)}</strong></span>`
+        : `<strong>Within cap</strong>`;
+
+      el.invoiceDiscountSummary.innerHTML = `
+        Subtotal: <strong>${formatPeso(editorState.subtotalAmount)}</strong><br>
+        Discount: <strong>${formatPeso(editorState.discountTotalAmount)}</strong><br>
+        Final Total: <strong>${formatPeso(editorState.totalAmount)}</strong><br>
+        Customer Discount Cap: <strong>${formatPeso(editorState.capAmount)}</strong> | ${capStatus}
+      `;
+    }
+
     el.invoiceTotalAmount.textContent = formatPeso(editorState.totalAmount);
   }
   function normalizeInvoiceNumberForKey(value) {
