@@ -834,27 +834,41 @@ function renderCustomerContacts(customer) {
     return Number(alloc?.allocated_amount ?? alloc?.amount ?? 0);
   }
 
-  function getPostDatedChequeEntries(customerId = null) {
+    function getPostDatedChequeEntries(customerId = null) {
     return state.payments
       .filter((payment) => {
-        const details = payment.details || {};
+        const details = getPaymentDetailsObject(payment);
+
         if (customerId && payment.customer_id !== customerId) return false;
-        return payment.method === "Cheque" && details.isPostDated && details.chequeDate && payment.cleared !== true;
+        if (payment.method !== "Cheque") return false;
+        if (!details.isPostDated || !details.chequeDate) return false;
+
+        // Only true pending post-dated cheques belong in follow-up panels.
+        return getChequeStatus(payment) === "Pending";
       })
       .map((payment) => {
-        const details = payment.details || {};
+        const details = getPaymentDetailsObject(payment);
         const customer = state.customers.find((c) => c.id === payment.customer_id);
 
         const allocations = (payment.allocations || []).map((alloc) => {
           const invoice = state.invoices.find((inv) => inv.id === alloc.invoice_id);
+          const allocatedAmount = round2(getAllocationAmount(alloc));
+          const invoiceBalance = round2(Number(invoice?.balance || 0));
+
+          // Only show the still-exposed amount tied to this cheque allocation.
+          const remainingExposure = round2(Math.min(invoiceBalance, allocatedAmount));
+
           return {
             invoice,
-            allocatedAmount: getAllocationAmount(alloc)
+            allocatedAmount,
+            remainingExposure
           };
         });
 
-                const invoiceNumbers = allocations.map((x) => getInvoiceReferenceLabel(x.invoice));
-        const openBalance = allocations.reduce((sum, x) => sum + Number(x.invoice?.balance || 0), 0);
+        const invoiceNumbers = allocations.map((x) => getInvoiceReferenceLabel(x.invoice));
+        const openBalance = round2(
+          allocations.reduce((sum, x) => sum + Number(x.remainingExposure || 0), 0)
+        );
 
         return {
           payment,
@@ -865,6 +879,7 @@ function renderCustomerContacts(customer) {
           openBalance
         };
       })
+      .filter((entry) => entry.openBalance > 0)
       .sort((a, b) => String(a.details.chequeDate || "").localeCompare(String(b.details.chequeDate || "")));
   }
 
@@ -883,7 +898,7 @@ function renderCustomerContacts(customer) {
     getPostDatedChequeEntries(customer.id)
       .filter((entry) => entry.openBalance > 0)
       .forEach((entry) => {
-        alerts.push(`Post-dated cheque follow-up: ${formatPeso(entry.payment.amount)} due on ${entry.details.chequeDate}`);
+        alerts.push(`Pending post-dated cheque: ${formatPeso(entry.openBalance)} due on ${entry.details.chequeDate}`);
       });
 
     if (!alerts.length) {
@@ -2140,10 +2155,11 @@ el.execOutstanding.textContent = formatCompactPeso(
           <td>${formatPeso(entry.payment.amount)}</td>
           <td>${escapeHtml(entry.invoiceNumbers.join(", ") || "-")}</td>
           <td>${formatPeso(entry.openBalance)}</td>
-          <td>${entry.openBalance > 0
-            ? `<span class="notice-pill notice-pending">Invoice Outstanding</span>`
-            : `<span class="status-pill status-paid">Invoice Paid</span>`}
-          </td>
+          <td>${
+  entry.details.chequeDate <= todayStr()
+    ? `<span class="notice-pill notice-pending">Due for Deposit</span>`
+    : `<span class="notice-pill notice-postdated">Upcoming</span>`
+}</td>
         `;
         postDatedChequesBody.appendChild(row);
       });
