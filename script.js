@@ -68,9 +68,15 @@ accountsView: byId("accountsView"),
       customerEditNoteWrap: byId("customerEditNoteWrap"),
       customerEditRequiredNote: byId("customerEditRequiredNote"),
       customerFormName: byId("customerFormName"),
-      customerFormPhone: byId("customerFormPhone"),
-      customerFormEmail: byId("customerFormEmail"),
-      additionalContacts: byId("additionalContacts"),
+customerFormPhone: byId("customerFormPhone"),
+customerFormEmail: byId("customerFormEmail"),
+customerDiscountSettingsWrap: byId("customerDiscountSettingsWrap"),
+customerDiscountAuthorizedInput: byId("customerDiscountAuthorizedInput"),
+customerDiscountConfigFields: byId("customerDiscountConfigFields"),
+customerDiscountMaxAmountInput: byId("customerDiscountMaxAmountInput"),
+customerDiscountNoteInput: byId("customerDiscountNoteInput"),
+customerDiscountHelpText: byId("customerDiscountHelpText"),
+additionalContacts: byId("additionalContacts"),
       addContactBtn: byId("addContactBtn"),
       saveCustomerBtn: byId("saveCustomerBtn"),
 
@@ -245,8 +251,9 @@ el.navReports.addEventListener("click", () => setView("reports"));
     });
 
     el.closeCustomerModalBtn.addEventListener("click", () => closeModal(el.customerModal));
-    el.addContactBtn.addEventListener("click", () => addContactRow());
-    el.saveCustomerBtn.addEventListener("click", saveCustomer);
+el.customerDiscountAuthorizedInput?.addEventListener("change", renderCustomerDiscountFields);
+el.addContactBtn.addEventListener("click", () => addContactRow());
+el.saveCustomerBtn.addEventListener("click", saveCustomer);
 
     el.createInvoiceBtn.addEventListener("click", openInvoiceModalForCreate);
     el.closeInvoiceModalBtn.addEventListener("click", () => closeModal(el.invoiceModal));
@@ -396,6 +403,26 @@ el.generateSoaBtn.addEventListener("click", generateSoa);
   function canApproveTbv() { return getRoleConfig().approveTbv; }
   function canGenerateSoa() { return getRoleConfig().generateSoa; }
   function canManageAccounts() { return getRoleConfig().manageAccounts; }
+    function canAuthorizeCustomerDiscount() {
+    return (state.currentProfile?.role || "") === "owner";
+  }
+
+  function isDiscountAuthorizedCustomer(customer) {
+    return !!customer?.discount_authorized;
+  }
+
+  function renderCustomerDiscountFields() {
+    const ownerCanConfigure = canAuthorizeCustomerDiscount();
+    const isEnabled = ownerCanConfigure && !!el.customerDiscountAuthorizedInput?.checked;
+
+    el.customerDiscountSettingsWrap?.classList.toggle("hidden", !ownerCanConfigure);
+    el.customerDiscountConfigFields?.classList.toggle("hidden", !isEnabled);
+
+    if (!isEnabled) {
+      if (el.customerDiscountMaxAmountInput) el.customerDiscountMaxAmountInput.value = "";
+      if (el.customerDiscountNoteInput) el.customerDiscountNoteInput.value = "";
+    }
+  }
   function editNoteRequired() { return getRoleConfig().noteRequiredOnEdit; }
     function canEditInvoiceRecord(invoice) {
     if (!invoice) return false;
@@ -652,19 +679,31 @@ el.generateSoaBtn.addEventListener("click", generateSoa);
     state.currentView = "customers";
   }
 
-  function renderCustomerList() {
+    function renderCustomerList() {
     const term = (el.customerSearch.value || "").trim().toLowerCase();
-    const list = state.customers.filter((c) => c.name.toLowerCase().includes(term)).sort((a, b) => a.name.localeCompare(b.name));
+    const list = state.customers
+      .filter((c) => c.name.toLowerCase().includes(term))
+      .sort((a, b) => a.name.localeCompare(b.name));
+
     el.customerList.innerHTML = "";
+
     if (!list.length) {
       el.customerList.innerHTML = `<div class="muted">No matching customers.</div>`;
       return;
     }
+
     list.forEach((customer) => {
       const button = document.createElement("button");
       button.type = "button";
       button.className = "customer-item" + (customer.id === state.selectedCustomerId ? " active" : "");
-      button.textContent = customer.name;
+      button.innerHTML = `
+        <span class="customer-item-inner">
+          <span>${escapeHtml(customer.name)}</span>
+          ${isDiscountAuthorizedCustomer(customer)
+            ? `<span class="customer-discount-star" title="Discount Authorized">★</span>`
+            : ""}
+        </span>
+      `;
       button.addEventListener("click", () => {
         state.selectedCustomerId = customer.id;
         renderCustomerList();
@@ -689,8 +728,24 @@ el.generateSoaBtn.addEventListener("click", generateSoa);
 
     el.welcomePanel.classList.add("hidden");
     el.customerDashboard.classList.remove("hidden");
-    el.customerTitle.textContent = customer.name;
-    el.customerMeta.textContent = `Primary Phone: ${customer.phone || "-"}${customer.email ? " | Email: " + customer.email : ""}`;
+        el.customerTitle.innerHTML = `
+      ${escapeHtml(customer.name)}
+      ${isDiscountAuthorizedCustomer(customer)
+        ? `<span class="customer-discount-star" title="Discount Authorized">★</span>`
+        : ""}
+    `;
+
+    el.customerMeta.innerHTML = `
+      Primary Phone: ${escapeHtml(customer.phone || "-")}
+      ${customer.email ? ` | Email: ${escapeHtml(customer.email)}` : ""}
+      ${isDiscountAuthorizedCustomer(customer)
+        ? `<br><span class="discount-chip">Discount Cap: ${escapeHtml(formatPeso(customer.discount_max_amount || 0))}</span>${
+            customer.discount_note
+              ? ` <span class="muted">Rule: ${escapeHtml(customer.discount_note)}</span>`
+              : ""
+          }`
+        : ""}
+    `;
 
     renderCustomerContacts(customer);
     renderCustomerSummary(customer);
@@ -911,7 +966,7 @@ function renderCustomerContacts(customer) {
     el.overdueAlertBox.innerHTML = alerts.map((a) => `<div>${escapeHtml(a)}</div>`).join("");
   }
 
-  function openAddCustomerModal() {
+    function openAddCustomerModal() {
     if (!canCreateCustomer()) return;
     state.editingCustomerId = null;
     el.customerModalTitle.textContent = "Add Customer";
@@ -920,15 +975,22 @@ function renderCustomerContacts(customer) {
     el.customerFormName.value = "";
     el.customerFormPhone.value = "";
     el.customerFormEmail.value = "";
+
+    if (el.customerDiscountAuthorizedInput) el.customerDiscountAuthorizedInput.checked = false;
+    if (el.customerDiscountMaxAmountInput) el.customerDiscountMaxAmountInput.value = "";
+    if (el.customerDiscountNoteInput) el.customerDiscountNoteInput.value = "";
+    renderCustomerDiscountFields();
+
     el.additionalContacts.innerHTML = "";
     addContactRow();
     openModal(el.customerModal);
   }
 
-  function openEditCustomerModal() {
+    function openEditCustomerModal() {
     if (!canEditCustomer()) return;
     const customer = getSelectedCustomer();
     if (!customer) return;
+
     state.editingCustomerId = customer.id;
     el.customerModalTitle.textContent = "Edit Customer";
     el.customerEditNoteWrap.classList.remove("hidden");
@@ -936,6 +998,18 @@ function renderCustomerContacts(customer) {
     el.customerFormName.value = customer.name || "";
     el.customerFormPhone.value = customer.phone || "";
     el.customerFormEmail.value = customer.email || "";
+
+    if (el.customerDiscountAuthorizedInput) {
+      el.customerDiscountAuthorizedInput.checked = !!customer.discount_authorized;
+    }
+    if (el.customerDiscountMaxAmountInput) {
+      el.customerDiscountMaxAmountInput.value = customer.discount_max_amount ?? "";
+    }
+    if (el.customerDiscountNoteInput) {
+      el.customerDiscountNoteInput.value = customer.discount_note || "";
+    }
+    renderCustomerDiscountFields();
+
     el.additionalContacts.innerHTML = "";
     (customer.contacts.length ? customer.contacts : [{}]).forEach((c) => addContactRow(c));
     openModal(el.customerModal);
@@ -954,10 +1028,11 @@ function renderCustomerContacts(customer) {
     el.additionalContacts.appendChild(row);
   }
 
-  async function saveCustomer() {
+    async function saveCustomer() {
     const name = el.customerFormName.value.trim();
     const phone = el.customerFormPhone.value.trim();
     const email = el.customerFormEmail.value.trim();
+
     if (!name) return alert("Customer name is required.");
     if (!phone) return alert("Phone number is required.");
 
@@ -967,28 +1042,117 @@ function renderCustomerContacts(customer) {
       email: card.querySelector(".contact-email")?.value.trim() || ""
     })).filter((c) => c.contact_name || c.phone || c.email);
 
+    const ownerCanConfigureDiscount = canAuthorizeCustomerDiscount();
+
+    let discountAuthorized = false;
+    let discountMaxAmount = null;
+    let discountNote = null;
+    let discountAuthorizedBy = null;
+    let discountAuthorizedAt = null;
+
+    const existingCustomer = state.editingCustomerId
+      ? state.customers.find((c) => c.id === state.editingCustomerId)
+      : null;
+
+    if (ownerCanConfigureDiscount) {
+      discountAuthorized = !!el.customerDiscountAuthorizedInput.checked;
+
+      if (discountAuthorized) {
+        discountMaxAmount = round2(num(el.customerDiscountMaxAmountInput.value));
+        if (discountMaxAmount <= 0) {
+          return alert("Max discount per invoice is required and must be greater than 0.");
+        }
+
+        discountNote = el.customerDiscountNoteInput.value.trim() || null;
+
+        if (existingCustomer?.discount_authorized) {
+          discountAuthorizedBy = existingCustomer.discount_authorized_by || state.currentProfile.id;
+          discountAuthorizedAt = existingCustomer.discount_authorized_at || new Date().toISOString();
+        } else {
+          discountAuthorizedBy = state.currentProfile.id;
+          discountAuthorizedAt = new Date().toISOString();
+        }
+      }
+    }
+
     if (state.editingCustomerId) {
       if (!canEditCustomer()) return;
+
       const note = el.customerEditRequiredNote.value.trim();
       if (editNoteRequired() && !note) return alert("Edit note is required for admin edits.");
-      const existing = getSelectedCustomer();
-      const { error } = await supabaseClient.from("customers").update({ name, phone, email: email || null, updated_at: new Date().toISOString() }).eq("id", state.editingCustomerId);
+
+      const updatePayload = {
+        name,
+        phone,
+        email: email || null,
+        updated_at: new Date().toISOString()
+      };
+
+      if (ownerCanConfigureDiscount) {
+        updatePayload.discount_authorized = discountAuthorized;
+        updatePayload.discount_max_amount = discountAuthorized ? discountMaxAmount : null;
+        updatePayload.discount_note = discountAuthorized ? discountNote : null;
+        updatePayload.discount_authorized_by = discountAuthorized ? discountAuthorizedBy : null;
+        updatePayload.discount_authorized_at = discountAuthorized ? discountAuthorizedAt : null;
+      }
+
+      const { error } = await supabaseClient
+        .from("customers")
+        .update(updatePayload)
+        .eq("id", state.editingCustomerId);
+
       if (error) return alert(error.message);
-      const { error: deleteContactsError } = await supabaseClient.from("customer_contacts").delete().eq("customer_id", state.editingCustomerId);
+
+      const { error: deleteContactsError } = await supabaseClient
+        .from("customer_contacts")
+        .delete()
+        .eq("customer_id", state.editingCustomerId);
+
       if (deleteContactsError) return alert(deleteContactsError.message);
+
       if (contacts.length) {
-        const { error: contactErr } = await supabaseClient.from("customer_contacts").insert(contacts.map((c) => ({ ...c, customer_id: state.editingCustomerId })));
+        const { error: contactErr } = await supabaseClient
+          .from("customer_contacts")
+          .insert(contacts.map((c) => ({ ...c, customer_id: state.editingCustomerId })));
+
         if (contactErr) return alert(contactErr.message);
       }
-      await addLog("Edit", "Customer", existing?.name || name, note, existing || null, { name, phone, email });
+
+      await addLog("Edit", "Customer", existingCustomer?.name || name, note, existingCustomer || null, updatePayload);
     } else {
       if (!canCreateCustomer()) return;
-      const { data, error } = await supabaseClient.from("customers").insert([{ name, phone, email: email || null, created_by: state.currentProfile.id }]).select().single();
+
+      const insertPayload = {
+        name,
+        phone,
+        email: email || null,
+        created_by: state.currentProfile.id
+      };
+
+      if (ownerCanConfigureDiscount) {
+        insertPayload.discount_authorized = discountAuthorized;
+        insertPayload.discount_max_amount = discountAuthorized ? discountMaxAmount : null;
+        insertPayload.discount_note = discountAuthorized ? discountNote : null;
+        insertPayload.discount_authorized_by = discountAuthorized ? state.currentProfile.id : null;
+        insertPayload.discount_authorized_at = discountAuthorized ? new Date().toISOString() : null;
+      }
+
+      const { data, error } = await supabaseClient
+        .from("customers")
+        .insert([insertPayload])
+        .select()
+        .single();
+
       if (error) return alert(error.message);
+
       if (contacts.length) {
-        const { error: contactErr } = await supabaseClient.from("customer_contacts").insert(contacts.map((c) => ({ ...c, customer_id: data.id })));
+        const { error: contactErr } = await supabaseClient
+          .from("customer_contacts")
+          .insert(contacts.map((c) => ({ ...c, customer_id: data.id })));
+
         if (contactErr) return alert(contactErr.message);
       }
+
       state.selectedCustomerId = data.id;
       await addLog("Create", "Customer", name, "", null, data);
     }
