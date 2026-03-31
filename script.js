@@ -1245,7 +1245,7 @@ function renderCustomerContacts(customer) {
 
     renderInvoiceDiscountControls();
 
-    (invoice.items.length ? invoice.items : [{}]).forEach((item) =>
+        (invoice.items.length ? invoice.items : [{}]).forEach((item) =>
       addLineItemRow({
         product: item.product_name,
         qty: item.qty,
@@ -1258,13 +1258,18 @@ function renderCustomerContacts(customer) {
     openModal(el.invoiceModal);
   }
 
-  function clearInvoiceForm() {
+    function clearInvoiceForm() {
     el.invoiceNumber.value = "";
     el.invoiceDate.value = "";
     el.poNumber.value = "";
     el.referenceInfo.value = "";
     el.lineItemsContainer.innerHTML = "";
     el.invoiceTotalAmount.textContent = formatPeso(0);
+
+    const breakdownBox = document.getElementById("invoiceDiscountBreakdown");
+    if (breakdownBox) {
+      breakdownBox.innerHTML = "";
+    }
   }
   function canUseInvoiceDiscount(customer) {
     return !!customer?.discount_authorized;
@@ -1401,14 +1406,25 @@ function renderCustomerContacts(customer) {
       Customer Discount Cap: <strong>${formatPeso(editorState.capAmount)}</strong> | ${capStatus}
     `;
   }
-    function addLineItemRow(item = {}) {
+      function addLineItemRow(item = {}) {
+    const customer = getSelectedCustomer();
+    const canDiscount = !!customer?.discount_authorized;
+
     const row = document.createElement("div");
     row.className = "line-item";
     row.innerHTML = `
       <input type="text" class="line-product" placeholder="Product name" value="${escapeAttr(item.product || "")}">
       <input type="number" class="line-qty" placeholder="Qty" min="0" step="0.01" value="${item.qty ?? ""}">
       <input type="number" class="line-price" placeholder="Price" min="0" step="0.01" value="${item.price ?? ""}">
-      <input type="number" class="line-discount-per-qty hidden-slot" placeholder="0.00" min="0" step="0.01" value="${item.discountPerQty ?? ""}">
+      <input
+        type="number"
+        class="line-discount-per-qty"
+        placeholder="Discount / Qty"
+        min="0"
+        step="0.01"
+        value="${item.discountPerQty ?? ""}"
+        ${canDiscount ? "" : "disabled"}
+      >
       <div class="line-total-box">₱0</div>
       <button type="button" class="delete-line-btn">&times;</button>
     `;
@@ -1432,35 +1448,108 @@ function renderCustomerContacts(customer) {
     el.lineItemsContainer.appendChild(row);
     updateInvoiceTotal();
   }
+  function getInvoiceDiscountBreakdownBox() {
+    let box = document.getElementById("invoiceDiscountBreakdown");
 
-    function updateInvoiceTotal() {
-    const editorState = getInvoiceEditorState();
+    if (!box) {
+      box = document.createElement("div");
+      box.id = "invoiceDiscountBreakdown";
+      box.className = "info-box";
+      box.style.marginTop = "12px";
 
-    const showPerQtyDiscount = editorState.discountAuthorized &&
-      editorState.discountEnabled &&
-      editorState.discountMode === "per_qty";
-
-    el.lineDiscountHeader?.classList.toggle("hidden-slot", !showPerQtyDiscount);
-
-    editorState.parsedRows.forEach((item) => {
-      const discountInput = item.row.querySelector(".line-discount-per-qty");
-      const totalBox = item.row.querySelector(".line-total-box");
-
-      discountInput.classList.toggle("hidden-slot", !showPerQtyDiscount);
-      discountInput.disabled = !showPerQtyDiscount;
-
-      totalBox.textContent = formatPeso(item.line_total);
-    });
-
-    if (
-      editorState.discountMode === "fixed" &&
-      el.invoiceDiscountFixedAmount &&
-      round2(num(el.invoiceDiscountFixedAmount.value)) !== editorState.invoiceDiscountAmount
-    ) {
-      el.invoiceDiscountFixedAmount.value = editorState.invoiceDiscountAmount || "";
+      const parentPanel = el.lineItemsContainer?.parentNode;
+      if (parentPanel) {
+        parentPanel.appendChild(box);
+      }
     }
 
-    renderInvoiceDiscountSummary(editorState);
+    return box;
+  }
+
+  function getInvoiceEditorState() {
+    const customer = getSelectedCustomer();
+    const discountAuthorized = !!customer?.discount_authorized;
+    const capAmount = round2(Number(customer?.discount_max_amount || 0));
+
+    const parsedRows = [...el.lineItemsContainer.querySelectorAll(".line-item")].map((row) => {
+      const product_name = row.querySelector(".line-product")?.value.trim() || "";
+      const qty = num(row.querySelector(".line-qty")?.value);
+      const unit_price = num(row.querySelector(".line-price")?.value);
+      const rawDiscountPerQty = round2(num(row.querySelector(".line-discount-per-qty")?.value));
+
+      const discount_per_qty = discountAuthorized ? rawDiscountPerQty : 0;
+      const line_subtotal = round2(qty * unit_price);
+      const line_discount_total = round2(Math.min(line_subtotal, qty * discount_per_qty));
+      const line_total = round2(Math.max(0, line_subtotal - line_discount_total));
+
+      return {
+        row,
+        product_name,
+        qty,
+        unit_price,
+        discount_per_qty,
+        line_subtotal,
+        line_discount_total,
+        line_total
+      };
+    });
+
+    const items = parsedRows.filter((item) =>
+      item.product_name || item.qty || item.unit_price || item.discount_per_qty
+    );
+
+    const subtotalAmount = round2(items.reduce((sum, item) => sum + item.line_subtotal, 0));
+    const discountTotalAmount = round2(items.reduce((sum, item) => sum + item.line_discount_total, 0));
+    const totalAmount = round2(Math.max(0, subtotalAmount - discountTotalAmount));
+
+    return {
+      customer,
+      discountAuthorized,
+      capAmount,
+      parsedRows,
+      items,
+      subtotalAmount,
+      discountTotalAmount,
+      totalAmount,
+      exceedsCap: discountAuthorized && discountTotalAmount > capAmount
+    };
+  }
+
+  function renderInvoiceDiscountBreakdown(editorState) {
+    const box = getInvoiceDiscountBreakdownBox();
+    if (!box) return;
+
+    if (!editorState.discountAuthorized) {
+      box.innerHTML = `
+        Discount not authorized for this customer.<br>
+        Subtotal: <strong>${formatPeso(editorState.subtotalAmount)}</strong><br>
+        Final Total: <strong>${formatPeso(editorState.totalAmount)}</strong>
+      `;
+      return;
+    }
+
+    const capNote = editorState.exceedsCap
+      ? `<span style="color:#c73636;"><strong>Over cap by ${formatPeso(editorState.discountTotalAmount - editorState.capAmount)}</strong></span>`
+      : `<strong>Within cap</strong>`;
+
+    box.innerHTML = `
+      Subtotal: <strong>${formatPeso(editorState.subtotalAmount)}</strong><br>
+      Discount: <strong>${formatPeso(editorState.discountTotalAmount)}</strong><br>
+      Final Total: <strong>${formatPeso(editorState.totalAmount)}</strong><br>
+      Customer Discount Cap: <strong>${formatPeso(editorState.capAmount)}</strong> | ${capNote}
+    `;
+  }
+      function updateInvoiceTotal() {
+    const editorState = getInvoiceEditorState();
+
+    editorState.parsedRows.forEach((item) => {
+      const totalBox = item.row.querySelector(".line-total-box");
+      if (totalBox) {
+        totalBox.textContent = formatPeso(item.line_total);
+      }
+    });
+
+    renderInvoiceDiscountBreakdown(editorState);
     el.invoiceTotalAmount.textContent = formatPeso(editorState.totalAmount);
   }
   function normalizeInvoiceNumberForKey(value) {
@@ -1485,7 +1574,7 @@ function renderCustomerContacts(customer) {
       return existingKey === targetKey;
     }) || null;
   }
-    async function saveInvoice() {
+      async function saveInvoice() {
     const customer = getSelectedCustomer();
     if (!customer) return;
 
@@ -1521,18 +1610,17 @@ function renderCustomerContacts(customer) {
     }
 
     const editorState = getInvoiceEditorState();
-    if (!editorState.items.length) return alert("Add at least one line item.");
+
+    if (!editorState.items.length) {
+      return alert("Add at least one line item.");
+    }
 
     if (editorState.exceedsCap) {
       return alert(
         `Discount exceeds this customer's authorized cap.\n\n` +
         `Cap: ${formatPeso(editorState.capAmount)}\n` +
-        `Applied: ${formatPeso(editorState.discountTotalAmount)}`
+        `Applied Discount: ${formatPeso(editorState.discountTotalAmount)}`
       );
-    }
-
-    if (editorState.isDiscountApplied && !editorState.discountReason) {
-      return alert("Discount reason is required when a discount is applied.");
     }
 
     const items = editorState.items.map((item) => ({
@@ -1573,11 +1661,11 @@ function renderCustomerContacts(customer) {
           po_number: poNumber || null,
           reference_info: referenceInfo || null,
           subtotal_amount: editorState.subtotalAmount,
-          line_discount_total: editorState.lineDiscountTotal,
-          invoice_discount_amount: editorState.invoiceDiscountAmount,
+          line_discount_total: editorState.discountTotalAmount,
+          invoice_discount_amount: 0,
           discount_total_amount: editorState.discountTotalAmount,
-          discount_mode: editorState.discountEnabled ? editorState.discountMode : "none",
-          discount_reason: editorState.isDiscountApplied ? editorState.discountReason : null,
+          discount_mode: editorState.discountTotalAmount > 0 ? "per_qty" : "none",
+          discount_reason: null,
           total_amount: total,
           balance_amount: balanceAmount,
           primary_status: primaryStatus,
@@ -1607,9 +1695,7 @@ function renderCustomerContacts(customer) {
         reference_info: referenceInfo,
         subtotal_amount: editorState.subtotalAmount,
         discount_total_amount: editorState.discountTotalAmount,
-        total_amount: total,
-        discount_mode: editorState.discountEnabled ? editorState.discountMode : "none",
-        discount_reason: editorState.isDiscountApplied ? editorState.discountReason : null
+        total_amount: total
       });
     } else {
       if (!canCreateInvoice()) return;
@@ -1624,11 +1710,11 @@ function renderCustomerContacts(customer) {
           po_number: poNumber || null,
           reference_info: referenceInfo || null,
           subtotal_amount: editorState.subtotalAmount,
-          line_discount_total: editorState.lineDiscountTotal,
-          invoice_discount_amount: editorState.invoiceDiscountAmount,
+          line_discount_total: editorState.discountTotalAmount,
+          invoice_discount_amount: 0,
           discount_total_amount: editorState.discountTotalAmount,
-          discount_mode: editorState.discountEnabled ? editorState.discountMode : "none",
-          discount_reason: editorState.isDiscountApplied ? editorState.discountReason : null,
+          discount_mode: editorState.discountTotalAmount > 0 ? "per_qty" : "none",
+          discount_reason: null,
           total_amount: total,
           paid_amount: 0,
           balance_amount: total,
