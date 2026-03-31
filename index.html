@@ -558,19 +558,54 @@
           <input id="referenceInfo" type="text" />
         </div>
       </div>
+<div id="invoiceDiscountWrap" class="panel soft-panel hidden">
+  <div class="panel-row">
+    <h4 class="panel-title small-title">Invoice Discount</h4>
+    <label class="checkbox-row">
+      <input id="invoiceDiscountEnabled" type="checkbox" />
+      Apply Discount
+    </label>
+  </div>
 
+  <div id="invoiceDiscountControls" class="form-grid two-col hidden" style="margin-top:12px;">
+    <div class="field">
+      <label for="invoiceDiscountMode">Discount Mode</label>
+      <select id="invoiceDiscountMode">
+        <option value="per_qty">Per Quantity</option>
+        <option value="fixed">Fixed Invoice Amount</option>
+      </select>
+    </div>
+
+    <div id="invoiceDiscountFixedWrap" class="field hidden">
+      <label for="invoiceDiscountFixedAmount">Fixed Discount Amount</label>
+      <input id="invoiceDiscountFixedAmount" type="number" min="0" step="0.01" />
+    </div>
+
+    <div id="invoiceDiscountReasonWrap" class="field" style="grid-column: 1 / -1;">
+      <label for="invoiceDiscountReason">Discount Reason *</label>
+      <textarea
+        id="invoiceDiscountReason"
+        rows="3"
+        placeholder="Example: Promo support / Customer retention / Authorized commercial adjustment"
+      ></textarea>
+    </div>
+  </div>
+
+  <div id="invoiceDiscountSummary" class="info-box" style="margin-top:12px;"></div>
+</div>
       <div class="panel soft-panel">
         <div class="panel-row">
           <h4 class="panel-title small-title">Line Items</h4>
           <button id="addLineBtn" class="btn btn-secondary" type="button">Add Line</button>
         </div>
         <div class="line-items-labels">
-          <span>Product Name</span>
-          <span>Quantity</span>
-          <span>Price</span>
-          <span>Line Total</span>
-          <span></span>
-        </div>
+  <span>Product Name</span>
+  <span>Quantity</span>
+  <span>Price</span>
+  <span id="lineDiscountHeader" class="hidden-slot">Discount / Qty</span>
+  <span>Line Total</span>
+  <span></span>
+</div>
         <div id="lineItemsContainer"></div>
       </div>
 
