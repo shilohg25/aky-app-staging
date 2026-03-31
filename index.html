@@ -485,7 +485,35 @@
           <input id="customerFormEmail" type="email" />
         </div>
       </div>
+<div id="customerDiscountSettingsWrap" class="panel soft-panel hidden">
+  <div class="panel-row">
+    <h4 class="panel-title small-title">Discount Authorization</h4>
+    <label class="checkbox-row">
+      <input id="customerDiscountAuthorizedInput" type="checkbox" />
+      Allow invoice discounts for this customer
+    </label>
+  </div>
 
+  <div id="customerDiscountConfigFields" class="form-grid one-col hidden" style="margin-top:12px;">
+    <div class="field">
+      <label for="customerDiscountMaxAmountInput">Max Discount Per Invoice *</label>
+      <input id="customerDiscountMaxAmountInput" type="number" min="0" step="0.01" />
+    </div>
+
+    <div class="field">
+      <label for="customerDiscountNoteInput">Discount Rule / Note</label>
+      <textarea
+        id="customerDiscountNoteInput"
+        rows="3"
+        placeholder="Optional owner note, e.g. Promo support only / Up to ₱500 per invoice."
+      ></textarea>
+    </div>
+  </div>
+
+  <div id="customerDiscountHelpText" class="info-box" style="margin-top:12px;">
+    Owner-only control. If enabled, max discount per invoice is required.
+  </div>
+</div>
       <div class="panel soft-panel">
         <div class="panel-row">
           <h4 class="panel-title small-title">Additional Contacts</h4>
