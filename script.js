@@ -127,7 +127,7 @@ saveInvoiceBtn: byId("saveInvoiceBtn"),
       partialBalanceInfo: byId("partialBalanceInfo"),
       proceedPartialPaymentBtn: byId("proceedPartialPaymentBtn"),
 
-      paymentMethodModal: byId("paymentMethodModal"),
+            paymentMethodModal: byId("paymentMethodModal"),
       closePaymentMethodModalBtn: byId("closePaymentMethodModalBtn"),
       paymentMethodSelect: byId("paymentMethodSelect"),
       chequeNumberWrap: byId("chequeNumberWrap"),
@@ -142,6 +142,10 @@ saveInvoiceBtn: byId("saveInvoiceBtn"),
       onlinePlatformInput: byId("onlinePlatformInput"),
       cashBankAccountWrap: byId("cashBankAccountWrap"),
       cashBankAccountInput: byId("cashBankAccountInput"),
+      withholdingTaxWrap: byId("withholdingTaxWrap"),
+      withholdingTaxAppliedInput: byId("withholdingTaxAppliedInput"),
+      withholdingTaxRateLabel: byId("withholdingTaxRateLabel"),
+      withholdingTaxPreviewBox: byId("withholdingTaxPreviewBox"),
       paymentReviewBox: byId("paymentReviewBox"),
       savePaymentBtn: byId("savePaymentBtn"),
 
@@ -288,8 +292,12 @@ el.saveInvoiceBtn.addEventListener("click", saveInvoice);
     el.partialAmountInput.addEventListener("input", renderPartialBalanceInfo);
     el.proceedPartialPaymentBtn.addEventListener("click", proceedPartialPayment);
 
-    el.closePaymentMethodModalBtn.addEventListener("click", () => closeModal(el.paymentMethodModal));
-    el.paymentMethodSelect.addEventListener("change", renderPaymentMethodFields);
+        el.closePaymentMethodModalBtn.addEventListener("click", () => closeModal(el.paymentMethodModal));
+    el.paymentMethodSelect.addEventListener("change", () => {
+      renderPaymentMethodFields();
+      renderPaymentReviewBox();
+    });
+    el.withholdingTaxAppliedInput?.addEventListener("change", renderWithholdingTaxUi);
     el.savePaymentBtn.addEventListener("click", savePayment);
 
     el.applyExecFilterBtn.addEventListener("click", renderExecutiveView);
@@ -1942,21 +1950,95 @@ function renderCustomerContacts(customer) {
     openPaymentMethodStep();
   }
 
-    function openPaymentMethodStep() {
-    if (!state.paymentDraft) return;
+      const DEFAULT_WITHHOLDING_TAX_RATE = 0.01;
+  const DEFAULT_WITHHOLDING_VAT_RATE = 0.12;
 
-    el.paymentMethodSelect.value = "";
-    el.chequeNumberInput.value = "";
-    el.chequeDateInput.value = todayStr();
-    el.chequePostDatedInput.checked = false;
-    el.onlineReferenceInput.value = "";
-    el.onlinePlatformInput.value = "";
-    el.cashBankAccountInput.value = "";
-    renderPaymentMethodFields();
+  function getCurrentWithholdingTaxRate() {
+    return DEFAULT_WITHHOLDING_TAX_RATE;
+  }
+
+  function getCurrentWithholdingVatRate() {
+    return DEFAULT_WITHHOLDING_VAT_RATE;
+  }
+
+  function computeWithholdingTaxBreakdown(
+    grossAmount,
+    taxRate = getCurrentWithholdingTaxRate(),
+    vatRate = getCurrentWithholdingVatRate()
+  ) {
+    const safeGross = round2(num(grossAmount));
+    const safeTaxRate = Math.max(0, num(taxRate));
+    const safeVatRate = Math.max(0, num(vatRate));
+
+    if (safeGross <= 0 || safeTaxRate <= 0) {
+      return {
+        grossAmount: safeGross,
+        taxRate: safeTaxRate,
+        vatRate: safeVatRate,
+        taxableBaseAmount: 0,
+        withholdingTaxAmount: 0,
+        netReceivedAmount: safeGross
+      };
+    }
+
+    const taxableBaseAmount = round2(safeGross / (1 + safeVatRate));
+    const withholdingTaxAmount = round2(taxableBaseAmount * safeTaxRate);
+    const netReceivedAmount = round2(Math.max(0, safeGross - withholdingTaxAmount));
+
+    return {
+      grossAmount: safeGross,
+      taxRate: safeTaxRate,
+      vatRate: safeVatRate,
+      taxableBaseAmount,
+      withholdingTaxAmount,
+      netReceivedAmount
+    };
+  }
+
+  function renderWithholdingTaxUi() {
+    const rate = getCurrentWithholdingTaxRate();
+    const vatRate = getCurrentWithholdingVatRate();
+    const breakdown = computeWithholdingTaxBreakdown(state.paymentDraft?.amount || 0, rate, vatRate);
+    const applied = !!el.withholdingTaxAppliedInput?.checked;
+
+    if (el.withholdingTaxRateLabel) {
+      el.withholdingTaxRateLabel.textContent = `${round2(rate * 100)}%`;
+    }
+
+    if (el.withholdingTaxPreviewBox) {
+      if (!state.paymentDraft) {
+        el.withholdingTaxPreviewBox.innerHTML = `No payment draft loaded.`;
+      } else if (!applied) {
+        el.withholdingTaxPreviewBox.innerHTML = `
+          Current rate: <strong>${round2(rate * 100)}%</strong><br>
+          Formula ready: <strong>Gross / ${round2(1 + vatRate)} × ${round2(rate * 100)}%</strong><br>
+          Gross Amount: <strong>${formatPeso(breakdown.grossAmount)}</strong><br>
+          If applied now, Withholding Tax would be: <strong>${formatPeso(breakdown.withholdingTaxAmount)}</strong><br>
+          Net Received would be: <strong>${formatPeso(breakdown.netReceivedAmount)}</strong>
+        `;
+      } else {
+        el.withholdingTaxPreviewBox.innerHTML = `
+          Current rate: <strong>${round2(rate * 100)}%</strong><br>
+          Formula used: <strong>${formatPeso(breakdown.grossAmount)} / ${round2(1 + vatRate)} × ${round2(rate * 100)}%</strong><br>
+          Tax Base: <strong>${formatPeso(breakdown.taxableBaseAmount)}</strong><br>
+          Withholding Tax: <strong>${formatPeso(breakdown.withholdingTaxAmount)}</strong><br>
+          Net Received: <strong>${formatPeso(breakdown.netReceivedAmount)}</strong>
+        `;
+      }
+    }
+
+    renderPaymentReviewBox();
+  }
+
+  function renderPaymentReviewBox() {
+    if (!state.paymentDraft) {
+      el.paymentReviewBox.innerHTML = "No payment draft prepared.";
+      return;
+    }
 
     const customer = getSelectedCustomer();
     const lines = state.paymentDraft.allocations.map((alloc) => {
-      const invoice = customer.invoices.find((inv) => inv.id === alloc.invoiceId);
+      const invoice = customer?.invoices.find((inv) => inv.id === alloc.invoiceId);
       return `${invoice ? invoice.invoice_number : "Invoice"}: ${formatPeso(alloc.amount)}`;
     });
 
@@ -1972,12 +2054,43 @@ function renderCustomerContacts(customer) {
         ? `<br>Replaces Bounced Cheque: <strong>${escapeHtml(state.paymentDraft.replacementOfChequeNumber || "-")}</strong>`
         : "";
 
+    const method = el.paymentMethodSelect.value || "Not selected yet";
+    const withholdingApplied = !!el.withholdingTaxAppliedInput?.checked;
+    const breakdown = computeWithholdingTaxBreakdown(state.paymentDraft.amount);
+
+    const taxHtml = withholdingApplied
+      ? `
+        <br>Gross Amount: <strong>${formatPeso(breakdown.grossAmount)}</strong>
+        <br>Withholding Tax (${round2(breakdown.taxRate * 100)}%): <strong>${formatPeso(breakdown.withholdingTaxAmount)}</strong>
+        <br>Net Received: <strong>${formatPeso(breakdown.netReceivedAmount)}</strong>
+      `
+      : `
+        <br>Gross Amount: <strong>${formatPeso(breakdown.grossAmount)}</strong>
+        <br>Withholding Tax: <strong>Not Applied</strong>
+      `;
+
     el.paymentReviewBox.innerHTML = `
       Payment Type: <strong>${paymentTypeLabel}</strong><br>
-      Amount: <strong>${formatPeso(state.paymentDraft.amount)}</strong><br>
+      Method: <strong>${escapeHtml(method)}</strong><br>
       Applied To: ${escapeHtml(lines.join(" | "))}${replacementInfo}
+      ${taxHtml}
     `;
+  }
 
+  function openPaymentMethodStep() {
+    if (!state.paymentDraft) return;
+
+    el.paymentMethodSelect.value = "";
+    el.chequeNumberInput.value = "";
+    el.chequeDateInput.value = todayStr();
+    el.chequePostDatedInput.checked = false;
+    el.onlineReferenceInput.value = "";
+    el.onlinePlatformInput.value = "";
+    el.cashBankAccountInput.value = "";
+    if (el.withholdingTaxAppliedInput) el.withholdingTaxAppliedInput.checked = false;
+
+    renderPaymentMethodFields();
+    renderWithholdingTaxUi();
     openModal(el.paymentMethodModal);
   }
 
@@ -1989,9 +2102,10 @@ function renderCustomerContacts(customer) {
     el.onlineReferenceWrap.classList.toggle("hidden", method !== "Online");
     el.onlinePlatformWrap.classList.toggle("hidden", method !== "Online");
     el.cashBankAccountWrap.classList.toggle("hidden", method !== "Cash");
+    renderPaymentReviewBox();
   }
 
-    async function savePayment() {
+  async function savePayment() {
     const customer = getSelectedCustomer();
     if (!customer || !state.paymentDraft) return;
     if (!canCreatePayment()) return;
@@ -2000,8 +2114,21 @@ function renderCustomerContacts(customer) {
     if (!method) return alert("Select a payment method.");
 
     const isReplacementPayment = state.paymentDraft.mode === "replacement";
+    const amount = round2(state.paymentDraft.amount);
+    const withholdingApplied = !!el.withholdingTaxAppliedInput?.checked;
+    const withholdingBreakdown = computeWithholdingTaxBreakdown(amount);
 
-    const details = {};
+    const details = {
+      grossReceivedAmount: amount,
+      withholdingTaxApplied: withholdingApplied,
+      withholdingTaxRate: withholdingApplied ? withholdingBreakdown.taxRate : 0,
+      withholdingTaxVatRate: withholdingApplied ? withholdingBreakdown.vatRate : 0,
+      withholdingTaxBaseAmount: withholdingApplied ? withholdingBreakdown.taxableBaseAmount : 0,
+      withholdingTaxAmount: withholdingApplied ? withholdingBreakdown.withholdingTaxAmount : 0,
+      netReceivedAmount: withholdingApplied ? withholdingBreakdown.netReceivedAmount : amount,
+      withholdingTaxFormula: withholdingApplied ? "gross / (1 + vat_rate) × tax_rate" : null
+    };
+
     let cleared = true;
 
     if (method === "Cash") {
@@ -2027,7 +2154,7 @@ function renderCustomerContacts(customer) {
       cleared = false;
     }
 
-        if (isReplacementPayment) {
+    if (isReplacementPayment) {
       details.isReplacementPayment = true;
       details.replacesPaymentId = state.paymentDraft.replacementOfPaymentId || null;
       details.replacementRootPaymentId =
@@ -2040,11 +2167,13 @@ function renderCustomerContacts(customer) {
     }
 
     const paymentDate = todayStr();
-    const amount = round2(state.paymentDraft.amount);
 
-    const paymentType = state.paymentDraft.mode === "full"
-      ? "Pay by Invoice"
-      : "Partial Payment";
+    const paymentType =
+      state.paymentDraft.mode === "full"
+        ? "Pay by Invoice"
+        : state.paymentDraft.mode === "replacement"
+          ? "Replacement Payment"
+          : "Partial Payment";
 
     const { data: payment, error: paymentError } = await supabaseClient
       .from("payments")
@@ -2103,11 +2232,19 @@ function renderCustomerContacts(customer) {
       }
     }
 
+    const taxLogText = withholdingApplied
+      ? ` | WTax ${formatPeso(details.withholdingTaxAmount)} | Net ${formatPeso(details.netReceivedAmount)}`
+      : "";
+
     const logLabel = isReplacementPayment
-      ? `Replacement Payment - ${method} - ${formatPeso(amount)}`
-      : `${payment.payment_type} - ${payment.method} - ${formatPeso(amount)}`;
+      ? `Replacement Payment - ${method} - Gross ${formatPeso(amount)}${taxLogText}`
+      : `${payment.payment_type} - ${payment.method} - Gross ${formatPeso(amount)}${taxLogText}`;
 
     await addLog("Create", "Payment", logLabel, "", null, payment);
+
+    const taxSuccessText = withholdingApplied
+      ? ` Withholding tax ${formatPeso(details.withholdingTaxAmount)} and net received ${formatPeso(details.netReceivedAmount)} were stored.`
+      : "";
 
     const successMessage = method === "Cheque"
       ? isReplacementPayment
@@ -2120,9 +2257,8 @@ function renderCustomerContacts(customer) {
     state.paymentDraft = null;
     closeModal(el.paymentMethodModal);
     await refreshAndRenderAll();
-    alert(successMessage);
+    alert(successMessage + taxSuccessText);
   }
-
   function renderPaymentTable(customer) {
     el.paymentTableBody.innerHTML = "";
     if (!customer.payments.length) {
@@ -3272,10 +3408,10 @@ function renderLogSortIndicators() {
   function openModal(node) { node.style.display = "flex"; }
   function closeModal(node) { node.style.display = "none"; }
 
-    function formatPaymentDetails(payment) {
+      function formatPaymentDetails(payment) {
     const details = getPaymentDetailsObject(payment);
 
-        const replacementText = details.isReplacementPayment
+    const replacementText = details.isReplacementPayment
       ? ` | Replaces bounced cheque #${details.replacesChequeNumber || "-"}`
       : "";
 
@@ -3283,19 +3419,24 @@ function renderLogSortIndicators() {
       ? ` | Root Ref: ${details.replacementRootPaymentId}`
       : "";
 
+    const taxText = details.withholdingTaxApplied
+      ? ` | WTax: ${formatPeso(details.withholdingTaxAmount || 0)} | Net: ${formatPeso(details.netReceivedAmount ?? payment.amount ?? 0)}`
+      : "";
+
     if (payment.method === "Cash") {
-      return escapeHtml(`Deposit to: ${details.bankAccountNumber || "-"}${replacementText}`);
+      return escapeHtml(`Deposit to: ${details.bankAccountNumber || "-"}${replacementText}${rootText}${taxText}`);
     }
 
     if (payment.method === "Online") {
-      return escapeHtml(`Ref: ${details.referenceNumber || "-"} | ${details.platformName || "-"}${replacementText}`);
+      return escapeHtml(`Ref: ${details.referenceNumber || "-"} | ${details.platformName || "-"}${replacementText}${rootText}${taxText}`);
     }
 
     if (payment.method === "Cheque") {
-      return escapeHtml(`Cheque #: ${details.chequeNumber || "-"} | Date: ${details.chequeDate || "-"}${details.isPostDated ? " | Post-Dated" : ""}${replacementText}`);
+      return escapeHtml(`Cheque #: ${details.chequeNumber || "-"} | Date: ${details.chequeDate || "-"}${details.isPostDated ? " | Post-Dated" : ""}${replacementText}${rootText}${taxText}`);
     }
 
-    return replacementText ? escapeHtml(replacementText.replace(/^ \| /, "")) : "-";
+    const fallbackText = `${replacementText}${rootText}${taxText}`.replace(/^ \| /, "");
+    return fallbackText ? escapeHtml(fallbackText) : "-";
   }
 
   function statusPill(status) {
