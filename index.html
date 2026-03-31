@@ -156,14 +156,14 @@
               <table class="records-table">
                 <thead>
                   <tr>
-                    <th>Date</th>
-                    <th>Type</th>
-                    <th>Method</th>
-                    <th>Details</th>
-                    <th>Amount</th>
-                    <th>Applied To</th>
-                    <th>Created By</th>
-                  </tr>
+  <th>Date</th>
+  <th>Type</th>
+  <th>Method</th>
+  <th>Details</th>
+  <th>Gross Amount</th>
+  <th>Applied To</th>
+  <th>Created By</th>
+</tr>
                 </thead>
                 <tbody id="paymentTableBody"></tbody>
               </table>
@@ -734,11 +734,27 @@
         </div>
 
         <div class="field hidden" id="cashBankAccountWrap">
-          <label for="cashBankAccountInput">Deposit Bank Account Number *</label>
-          <input id="cashBankAccountInput" type="text" />
-        </div>
+  <label for="cashBankAccountInput">Deposit Bank Account Number *</label>
+  <input id="cashBankAccountInput" type="text" />
+</div>
 
-        <div id="paymentReviewBox" class="info-box"></div>
+<div id="withholdingTaxWrap" class="panel soft-panel">
+  <div class="panel-row">
+    <h4 class="panel-title small-title">Withholding Tax</h4>
+    <label class="checkbox-row">
+      <input id="withholdingTaxAppliedInput" type="checkbox" />
+      Apply Withholding Tax
+    </label>
+  </div>
+
+  <div id="withholdingTaxPreviewBox" class="info-box" style="margin-top:12px;">
+    Current rate: <strong id="withholdingTaxRateLabel">1%</strong><br>
+    Formula: <strong>Gross / 1.12 × Rate</strong><br>
+    Gross settles the invoice. Net is stored for audit and reporting.
+  </div>
+</div>
+
+<div id="paymentReviewBox" class="info-box"></div>
       </div>
 
       <div class="modal-footer">
