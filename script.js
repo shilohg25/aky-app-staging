@@ -749,7 +749,7 @@ function renderCustomerContacts(customer) {
 
   function renderCustomerSummary(customer) {
     const totalInvoiced = customer.invoices.reduce((sum, x) => sum + Number(x.total || 0), 0);
-    const totalCollected = customer.payments.filter((p) => p.cleared !== false).reduce((sum, x) => sum + Number(x.amount || 0), 0);
+    const totalCollected = getOperationalCollectedAmount(customer.id);
     const totalOutstanding = customer.invoices.reduce((sum, x) => sum + Number(x.balance || 0), 0);
     const overdueCount = customer.invoices.filter((x) => x.balance > 0 && getDaysOpen(x.invoice_date) > 90).length;
 
@@ -1666,9 +1666,8 @@ function renderCustomerContacts(customer) {
 );
 
 el.execCollected.textContent = formatCompactPeso(
-  payments.filter((p) => p.cleared !== false).reduce((sum, x) => sum + Number(x.amount || 0), 0)
+  getOperationalCollectedAmount(null, from, to)
 );
-
 el.execOutstanding.textContent = formatCompactPeso(
   invoices.reduce((sum, x) => sum + Number(x.balance || 0), 0)
 );
@@ -1987,6 +1986,36 @@ el.execOutstanding.textContent = formatCompactPeso(
     if (details.isReplacementPayment) return "Replacement Payment";
     return payment.payment_type || "-";
   }
+    function isOperationallyCollectedPayment(payment) {
+    if (!payment) return false;
+
+    if (payment.method === "Cheque") {
+      return payment.cleared === true && getChequeStatus(payment) === "Cleared";
+    }
+
+    return payment.cleared !== false;
+  }
+
+  function getOperationalCollectedAmount(customerId = null, paymentDateFrom = null, paymentDateTo = null) {
+    return round2(
+      state.allocations.reduce((sum, alloc) => {
+        const payment = state.payments.find((p) => p.id === alloc.payment_id);
+        const invoice = state.invoices.find((inv) => inv.id === alloc.invoice_id);
+
+        if (!payment || !invoice) return sum;
+        if (customerId && payment.customer_id !== customerId) return sum;
+        if (customerId && invoice.customer_id !== customerId) return sum;
+        if (isVoidedInvoice(invoice)) return sum;
+        if (!isOperationallyCollectedPayment(payment)) return sum;
+
+        if ((paymentDateFrom || paymentDateTo) && !passesDateFilter(payment.payment_date, paymentDateFrom, paymentDateTo)) {
+          return sum;
+        }
+
+        return round2(sum + getAllocationAmount(alloc));
+      }, 0)
+    );
+  }
       function startChequeReplacement(paymentId) {
     if (!canManageChequeRegister()) return;
 
@@ -2191,7 +2220,13 @@ el.execOutstanding.textContent = formatCompactPeso(
   function getReportRows() {
         return getActiveInvoices().map((invoice) => {
       const customer = state.customers.find((c) => c.id === invoice.customer_id);
-      const paymentDates = state.allocations.filter((a) => a.invoice_id === invoice.id).map((a) => state.payments.find((p) => p.id === a.payment_id)?.payment_date).filter(Boolean).sort();
+  const paymentDates = state.allocations
+  .filter((a) => a.invoice_id === invoice.id)
+  .map((a) => state.payments.find((p) => p.id === a.payment_id))
+  .filter((payment) => payment && isOperationallyCollectedPayment(payment))
+  .map((payment) => payment.payment_date)
+  .filter(Boolean)
+  .sort();
       const latestPaidDate = paymentDates.length ? paymentDates[paymentDates.length - 1] : "";
       return {
         customerId: customer?.id || "",
