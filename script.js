@@ -86,13 +86,23 @@ additionalContacts: byId("additionalContacts"),
       editNoteWrap: byId("editNoteWrap"),
       editRequiredNote: byId("editRequiredNote"),
       invoiceNumber: byId("invoiceNumber"),
-      invoiceDate: byId("invoiceDate"),
-      poNumber: byId("poNumber"),
-      referenceInfo: byId("referenceInfo"),
-      lineItemsContainer: byId("lineItemsContainer"),
-      addLineBtn: byId("addLineBtn"),
-      invoiceTotalAmount: byId("invoiceTotalAmount"),
-      saveInvoiceBtn: byId("saveInvoiceBtn"),
+invoiceDate: byId("invoiceDate"),
+poNumber: byId("poNumber"),
+referenceInfo: byId("referenceInfo"),
+invoiceDiscountWrap: byId("invoiceDiscountWrap"),
+invoiceDiscountEnabled: byId("invoiceDiscountEnabled"),
+invoiceDiscountControls: byId("invoiceDiscountControls"),
+invoiceDiscountMode: byId("invoiceDiscountMode"),
+invoiceDiscountFixedWrap: byId("invoiceDiscountFixedWrap"),
+invoiceDiscountFixedAmount: byId("invoiceDiscountFixedAmount"),
+invoiceDiscountReasonWrap: byId("invoiceDiscountReasonWrap"),
+invoiceDiscountReason: byId("invoiceDiscountReason"),
+invoiceDiscountSummary: byId("invoiceDiscountSummary"),
+lineDiscountHeader: byId("lineDiscountHeader"),
+lineItemsContainer: byId("lineItemsContainer"),
+addLineBtn: byId("addLineBtn"),
+invoiceTotalAmount: byId("invoiceTotalAmount"),
+saveInvoiceBtn: byId("saveInvoiceBtn"),
 
       invoiceViewModal: byId("invoiceViewModal"),
       closeInvoiceViewModalBtn: byId("closeInvoiceViewModalBtn"),
@@ -256,9 +266,12 @@ el.addContactBtn.addEventListener("click", () => addContactRow());
 el.saveCustomerBtn.addEventListener("click", saveCustomer);
 
     el.createInvoiceBtn.addEventListener("click", openInvoiceModalForCreate);
-    el.closeInvoiceModalBtn.addEventListener("click", () => closeModal(el.invoiceModal));
-    el.addLineBtn.addEventListener("click", () => addLineItemRow());
-    el.saveInvoiceBtn.addEventListener("click", saveInvoice);
+el.closeInvoiceModalBtn.addEventListener("click", () => closeModal(el.invoiceModal));
+el.invoiceDiscountEnabled?.addEventListener("change", renderInvoiceDiscountControls);
+el.invoiceDiscountMode?.addEventListener("change", renderInvoiceDiscountControls);
+el.invoiceDiscountFixedAmount?.addEventListener("input", updateInvoiceTotal);
+el.addLineBtn.addEventListener("click", () => addLineItemRow());
+el.saveInvoiceBtn.addEventListener("click", saveInvoice);
 
     el.closeInvoiceViewModalBtn.addEventListener("click", () => closeModal(el.invoiceViewModal));
 
@@ -1180,37 +1193,67 @@ function renderCustomerContacts(customer) {
     alert("Customer deleted successfully.");
   }
 
-  function openInvoiceModalForCreate() {
+    function openInvoiceModalForCreate() {
     if (!canCreateInvoice()) return;
     const customer = getSelectedCustomer();
     if (!customer) return alert("Please select a customer first.");
+
     state.editingInvoiceId = null;
     el.invoiceModalTitle.textContent = "Create Invoice";
     el.editNoteWrap.classList.add("hidden");
     el.editRequiredNote.value = "";
     clearInvoiceForm();
+    resetInvoiceDiscountInputs();
     el.invoiceDate.value = todayStr();
+    renderInvoiceDiscountControls();
     addLineItemRow();
     updateInvoiceTotal();
     openModal(el.invoiceModal);
   }
 
-  function openInvoiceModalForEdit(invoiceId) {
+    function openInvoiceModalForEdit(invoiceId) {
     if (!canEditInvoice()) return;
     const customer = getSelectedCustomer();
     if (!customer) return;
+
     const invoice = customer.invoices.find((x) => x.id === invoiceId);
     if (!invoice) return;
+
     state.editingInvoiceId = invoice.id;
     el.invoiceModalTitle.textContent = "Edit Invoice";
     el.editNoteWrap.classList.remove("hidden");
     el.editRequiredNote.value = "";
     clearInvoiceForm();
+
     el.invoiceNumber.value = invoice.invoice_number || "";
     el.invoiceDate.value = invoice.invoice_date || "";
     el.poNumber.value = invoice.po_number || "";
     el.referenceInfo.value = invoice.reference_info || "";
-    (invoice.items.length ? invoice.items : [{}]).forEach((item) => addLineItemRow({ product: item.product_name, qty: item.qty, price: item.unit_price }));
+
+    if (canUseInvoiceDiscount(customer)) {
+      const existingMode = invoice.discount_mode || "none";
+      const hasDiscount = Number(invoice.discount_total_amount || 0) > 0;
+
+      el.invoiceDiscountEnabled.checked = existingMode !== "none" || hasDiscount;
+      el.invoiceDiscountMode.value =
+        existingMode === "fixed" ? "fixed" : "per_qty";
+      el.invoiceDiscountFixedAmount.value = invoice.invoice_discount_amount ?? "";
+      el.invoiceDiscountReason.value = invoice.discount_reason || "";
+    } else {
+      resetInvoiceDiscountInputs();
+    }
+
+    renderInvoiceDiscountControls();
+
+    (invoice.items.length ? invoice.items : [{}]).forEach((item) =>
+      addLineItemRow({
+        product: item.product_name,
+        qty: item.qty,
+        price: item.unit_price,
+        discountPerQty: item.discount_per_qty || 0
+      })
+    );
+
     updateInvoiceTotal();
     openModal(el.invoiceModal);
   }
@@ -1223,31 +1266,163 @@ function renderCustomerContacts(customer) {
     el.lineItemsContainer.innerHTML = "";
     el.invoiceTotalAmount.textContent = formatPeso(0);
   }
+  function canUseInvoiceDiscount(customer) {
+    return !!customer?.discount_authorized;
+  }
 
-  function addLineItemRow(item = {}) {
+  function resetInvoiceDiscountInputs() {
+    if (el.invoiceDiscountEnabled) el.invoiceDiscountEnabled.checked = false;
+    if (el.invoiceDiscountMode) el.invoiceDiscountMode.value = "per_qty";
+    if (el.invoiceDiscountFixedAmount) el.invoiceDiscountFixedAmount.value = "";
+    if (el.invoiceDiscountReason) el.invoiceDiscountReason.value = "";
+  }
+
+  function getInvoiceEditorState() {
+    const customer = getSelectedCustomer();
+    const discountAuthorized = canUseInvoiceDiscount(customer);
+    const discountEnabled = discountAuthorized && !!el.invoiceDiscountEnabled?.checked;
+    const discountMode = discountEnabled
+      ? (el.invoiceDiscountMode?.value === "fixed" ? "fixed" : "per_qty")
+      : "none";
+
+    const parsedRows = [...el.lineItemsContainer.querySelectorAll(".line-item")].map((row) => {
+      const product_name = row.querySelector(".line-product")?.value.trim() || "";
+      const qty = num(row.querySelector(".line-qty")?.value);
+      const unit_price = num(row.querySelector(".line-price")?.value);
+      const rawDiscountPerQty = round2(num(row.querySelector(".line-discount-per-qty")?.value));
+
+      const line_subtotal = round2(qty * unit_price);
+      const effectiveDiscountPerQty = discountMode === "per_qty" ? rawDiscountPerQty : 0;
+      const line_discount_total = round2(Math.min(line_subtotal, qty * effectiveDiscountPerQty));
+      const line_total = round2(Math.max(0, line_subtotal - line_discount_total));
+
+      return {
+        row,
+        product_name,
+        qty,
+        unit_price,
+        rawDiscountPerQty,
+        discount_per_qty: effectiveDiscountPerQty,
+        line_subtotal,
+        line_discount_total,
+        line_total
+      };
+    });
+
+    const items = parsedRows.filter((item) =>
+      item.product_name || item.qty || item.unit_price || item.rawDiscountPerQty
+    );
+
+    const subtotalAmount = round2(items.reduce((sum, item) => sum + item.line_subtotal, 0));
+    const lineDiscountTotal = round2(items.reduce((sum, item) => sum + item.line_discount_total, 0));
+
+    let invoiceDiscountAmount = discountMode === "fixed"
+      ? round2(num(el.invoiceDiscountFixedAmount?.value))
+      : 0;
+
+    const maxFixedAllowed = round2(Math.max(0, subtotalAmount - lineDiscountTotal));
+    if (invoiceDiscountAmount > maxFixedAllowed) {
+      invoiceDiscountAmount = maxFixedAllowed;
+    }
+
+    const discountTotalAmount = round2(lineDiscountTotal + invoiceDiscountAmount);
+    const totalAmount = round2(Math.max(0, subtotalAmount - discountTotalAmount));
+    const capAmount = round2(Number(customer?.discount_max_amount || 0));
+    const discountReason = discountEnabled ? (el.invoiceDiscountReason?.value.trim() || "") : "";
+    const exceedsCap = discountEnabled && discountTotalAmount > capAmount;
+    const isDiscountApplied = discountEnabled && discountTotalAmount > 0;
+
+    return {
+      customer,
+      discountAuthorized,
+      discountEnabled,
+      discountMode,
+      parsedRows,
+      items,
+      subtotalAmount,
+      lineDiscountTotal,
+      invoiceDiscountAmount,
+      discountTotalAmount,
+      totalAmount,
+      capAmount,
+      discountReason,
+      exceedsCap,
+      isDiscountApplied
+    };
+  }
+
+  function renderInvoiceDiscountControls() {
+    const customer = getSelectedCustomer();
+    const discountAuthorized = canUseInvoiceDiscount(customer);
+
+    el.invoiceDiscountWrap?.classList.toggle("hidden", !discountAuthorized);
+
+    if (!discountAuthorized) {
+      resetInvoiceDiscountInputs();
+    }
+
+    const discountEnabled = discountAuthorized && !!el.invoiceDiscountEnabled?.checked;
+    const mode = discountEnabled
+      ? (el.invoiceDiscountMode?.value === "fixed" ? "fixed" : "per_qty")
+      : "none";
+
+    el.invoiceDiscountControls?.classList.toggle("hidden", !discountEnabled);
+    el.invoiceDiscountFixedWrap?.classList.toggle("hidden", !(discountEnabled && mode === "fixed"));
+
+    updateInvoiceTotal();
+  }
+
+  function updateInvoiceDiscountSummary(editorState) {
+    if (!el.invoiceDiscountSummary) return;
+
+    if (!editorState.discountAuthorized) {
+      el.invoiceDiscountSummary.innerHTML = "Discounts are not enabled for this customer.";
+      return;
+    }
+
+    if (!editorState.discountEnabled) {
+      el.invoiceDiscountSummary.innerHTML = `
+        Customer is discount-authorized.<br>
+        Max discount per invoice: <strong>${formatPeso(editorState.capAmount)}</strong>
+      `;
+      return;
+    }
+
+    const capStatus = editorState.exceedsCap
+      ? `<span style="color:#c73636;"><strong>Over cap by ${formatPeso(editorState.discountTotalAmount - editorState.capAmount)}</strong></span>`
+      : `<strong>Within cap</strong>`;
+
+    el.invoiceDiscountSummary.innerHTML = `
+      Subtotal: <strong>${formatPeso(editorState.subtotalAmount)}</strong><br>
+      Line Discounts: <strong>${formatPeso(editorState.lineDiscountTotal)}</strong><br>
+      Fixed Invoice Discount: <strong>${formatPeso(editorState.invoiceDiscountAmount)}</strong><br>
+      Total Discount: <strong>${formatPeso(editorState.discountTotalAmount)}</strong><br>
+      Final Invoice Total: <strong>${formatPeso(editorState.totalAmount)}</strong><br>
+      Customer Discount Cap: <strong>${formatPeso(editorState.capAmount)}</strong> | ${capStatus}
+    `;
+  }
+    function addLineItemRow(item = {}) {
     const row = document.createElement("div");
     row.className = "line-item";
     row.innerHTML = `
       <input type="text" class="line-product" placeholder="Product name" value="${escapeAttr(item.product || "")}">
       <input type="number" class="line-qty" placeholder="Qty" min="0" step="0.01" value="${item.qty ?? ""}">
       <input type="number" class="line-price" placeholder="Price" min="0" step="0.01" value="${item.price ?? ""}">
+      <input type="number" class="line-discount-per-qty hidden-slot" placeholder="0.00" min="0" step="0.01" value="${item.discountPerQty ?? ""}">
       <div class="line-total-box">₱0</div>
       <button type="button" class="delete-line-btn">&times;</button>
     `;
 
     const qtyInput = row.querySelector(".line-qty");
     const priceInput = row.querySelector(".line-price");
-    const totalBox = row.querySelector(".line-total-box");
+    const discountInput = row.querySelector(".line-discount-per-qty");
 
-    const recalc = () => {
-      const qty = num(qtyInput.value);
-      const price = num(priceInput.value);
-      totalBox.textContent = formatPeso(qty * price);
-      updateInvoiceTotal();
-    };
+    const recalc = () => updateInvoiceTotal();
 
     qtyInput.addEventListener("input", recalc);
     priceInput.addEventListener("input", recalc);
+    discountInput.addEventListener("input", recalc);
+
     row.querySelector(".delete-line-btn").addEventListener("click", () => {
       row.remove();
       if (!el.lineItemsContainer.children.length) addLineItemRow();
@@ -1255,12 +1430,38 @@ function renderCustomerContacts(customer) {
     });
 
     el.lineItemsContainer.appendChild(row);
-    recalc();
+    updateInvoiceTotal();
   }
 
-  function updateInvoiceTotal() {
-    const total = [...el.lineItemsContainer.querySelectorAll(".line-item")].reduce((sum, row) => sum + num(row.querySelector(".line-qty").value) * num(row.querySelector(".line-price").value), 0);
-    el.invoiceTotalAmount.textContent = formatPeso(total);
+    function updateInvoiceTotal() {
+    const editorState = getInvoiceEditorState();
+
+    const showPerQtyDiscount = editorState.discountAuthorized &&
+      editorState.discountEnabled &&
+      editorState.discountMode === "per_qty";
+
+    el.lineDiscountHeader?.classList.toggle("hidden-slot", !showPerQtyDiscount);
+
+    editorState.parsedRows.forEach((item) => {
+      const discountInput = item.row.querySelector(".line-discount-per-qty");
+      const totalBox = item.row.querySelector(".line-total-box");
+
+      discountInput.classList.toggle("hidden-slot", !showPerQtyDiscount);
+      discountInput.disabled = !showPerQtyDiscount;
+
+      totalBox.textContent = formatPeso(item.line_total);
+    });
+
+    if (
+      editorState.discountMode === "fixed" &&
+      el.invoiceDiscountFixedAmount &&
+      round2(num(el.invoiceDiscountFixedAmount.value)) !== editorState.invoiceDiscountAmount
+    ) {
+      el.invoiceDiscountFixedAmount.value = editorState.invoiceDiscountAmount || "";
+    }
+
+    renderInvoiceDiscountSummary(editorState);
+    el.invoiceTotalAmount.textContent = formatPeso(editorState.totalAmount);
   }
   function normalizeInvoiceNumberForKey(value) {
     return String(value || "")
@@ -1284,14 +1485,16 @@ function renderCustomerContacts(customer) {
       return existingKey === targetKey;
     }) || null;
   }
-  async function saveInvoice() {
+    async function saveInvoice() {
     const customer = getSelectedCustomer();
     if (!customer) return;
+
     const invoiceNumber = el.invoiceNumber.value.trim();
     const invoiceDate = el.invoiceDate.value;
     const poNumber = el.poNumber.value.trim();
     const referenceInfo = el.referenceInfo.value.trim();
-        if (!invoiceNumber) return alert("Invoice number is required.");
+
+    if (!invoiceNumber) return alert("Invoice number is required.");
     if (!invoiceDate) return alert("Invoice date is required.");
 
     const invoiceNumberKey = normalizeInvoiceNumberForKey(invoiceNumber);
@@ -1317,28 +1520,51 @@ function renderCustomerContacts(customer) {
       );
     }
 
-    const items = [...el.lineItemsContainer.querySelectorAll(".line-item")].map((row) => {
-      const product = row.querySelector(".line-product").value.trim();
-      const qty = num(row.querySelector(".line-qty").value);
-      const price = num(row.querySelector(".line-price").value);
-      return { product_name: product, qty, unit_price: price, line_total: round2(qty * price) };
-    }).filter((item) => item.product_name || item.qty || item.unit_price);
-    if (!items.length) return alert("Add at least one line item.");
-    const total = round2(items.reduce((sum, item) => sum + item.line_total, 0));
+    const editorState = getInvoiceEditorState();
+    if (!editorState.items.length) return alert("Add at least one line item.");
+
+    if (editorState.exceedsCap) {
+      return alert(
+        `Discount exceeds this customer's authorized cap.\n\n` +
+        `Cap: ${formatPeso(editorState.capAmount)}\n` +
+        `Applied: ${formatPeso(editorState.discountTotalAmount)}`
+      );
+    }
+
+    if (editorState.isDiscountApplied && !editorState.discountReason) {
+      return alert("Discount reason is required when a discount is applied.");
+    }
+
+    const items = editorState.items.map((item) => ({
+      product_name: item.product_name,
+      qty: item.qty,
+      unit_price: item.unit_price,
+      line_subtotal: item.line_subtotal,
+      discount_per_qty: item.discount_per_qty,
+      line_discount_total: item.line_discount_total,
+      line_total: item.line_total
+    }));
+
+    const total = editorState.totalAmount;
 
     if (state.editingInvoiceId) {
       if (!canEditInvoice()) return;
+
       const editNote = el.editRequiredNote.value.trim();
       if (editNoteRequired() && !editNote) return alert("Edit note is required for admin edits.");
-            const oldInvoice = state.invoices.find((x) => x.id === state.editingInvoiceId);
+
+      const oldInvoice = state.invoices.find((x) => x.id === state.editingInvoiceId);
       if (!oldInvoice) return alert("Invoice not found.");
+
       if (!canEditInvoiceRecord(oldInvoice)) {
         return alert("Admin cannot edit partially paid or paid invoices.");
       }
+
       const paidAmount = Number(oldInvoice.paidAmount || 0);
       const balanceAmount = round2(Math.max(0, total - paidAmount));
       const primaryStatus = balanceAmount <= 0 ? "PAID" : balanceAmount < total ? "PARTIALLY_PAID" : "UNPAID";
-            const { error } = await supabaseClient
+
+      const { error } = await supabaseClient
         .from("invoices")
         .update({
           invoice_number: invoiceNumber,
@@ -1346,21 +1572,49 @@ function renderCustomerContacts(customer) {
           invoice_date: invoiceDate,
           po_number: poNumber || null,
           reference_info: referenceInfo || null,
+          subtotal_amount: editorState.subtotalAmount,
+          line_discount_total: editorState.lineDiscountTotal,
+          invoice_discount_amount: editorState.invoiceDiscountAmount,
+          discount_total_amount: editorState.discountTotalAmount,
+          discount_mode: editorState.discountEnabled ? editorState.discountMode : "none",
+          discount_reason: editorState.isDiscountApplied ? editorState.discountReason : null,
           total_amount: total,
           balance_amount: balanceAmount,
           primary_status: primaryStatus,
           updated_at: new Date().toISOString()
         })
         .eq("id", state.editingInvoiceId);
+
       if (error) return alert(error.message);
-      const { error: deleteItemsError } = await supabaseClient.from("invoice_items").delete().eq("invoice_id", state.editingInvoiceId);
+
+      const { error: deleteItemsError } = await supabaseClient
+        .from("invoice_items")
+        .delete()
+        .eq("invoice_id", state.editingInvoiceId);
+
       if (deleteItemsError) return alert(deleteItemsError.message);
-      const { error: itemError } = await supabaseClient.from("invoice_items").insert(items.map((i) => ({ ...i, invoice_id: state.editingInvoiceId })));
+
+      const { error: itemError } = await supabaseClient
+        .from("invoice_items")
+        .insert(items.map((i) => ({ ...i, invoice_id: state.editingInvoiceId })));
+
       if (itemError) return alert(itemError.message);
-      await addLog("Edit", "Invoice", invoiceNumber, editNote, oldInvoice, { invoice_number: invoiceNumber, invoice_date: invoiceDate, po_number: poNumber, reference_info: referenceInfo, total_amount: total });
+
+      await addLog("Edit", "Invoice", invoiceNumber, editNote, oldInvoice, {
+        invoice_number: invoiceNumber,
+        invoice_date: invoiceDate,
+        po_number: poNumber,
+        reference_info: referenceInfo,
+        subtotal_amount: editorState.subtotalAmount,
+        discount_total_amount: editorState.discountTotalAmount,
+        total_amount: total,
+        discount_mode: editorState.discountEnabled ? editorState.discountMode : "none",
+        discount_reason: editorState.isDiscountApplied ? editorState.discountReason : null
+      });
     } else {
       if (!canCreateInvoice()) return;
-            const { data, error } = await supabaseClient
+
+      const { data, error } = await supabaseClient
         .from("invoices")
         .insert([{
           customer_id: customer.id,
@@ -1369,6 +1623,12 @@ function renderCustomerContacts(customer) {
           invoice_date: invoiceDate,
           po_number: poNumber || null,
           reference_info: referenceInfo || null,
+          subtotal_amount: editorState.subtotalAmount,
+          line_discount_total: editorState.lineDiscountTotal,
+          invoice_discount_amount: editorState.invoiceDiscountAmount,
+          discount_total_amount: editorState.discountTotalAmount,
+          discount_mode: editorState.discountEnabled ? editorState.discountMode : "none",
+          discount_reason: editorState.isDiscountApplied ? editorState.discountReason : null,
           total_amount: total,
           paid_amount: 0,
           balance_amount: total,
@@ -1379,9 +1639,15 @@ function renderCustomerContacts(customer) {
         }])
         .select()
         .single();
+
       if (error) return alert(error.message);
-      const { error: itemError } = await supabaseClient.from("invoice_items").insert(items.map((i) => ({ ...i, invoice_id: data.id })));
+
+      const { error: itemError } = await supabaseClient
+        .from("invoice_items")
+        .insert(items.map((i) => ({ ...i, invoice_id: data.id })));
+
       if (itemError) return alert(itemError.message);
+
       await addLog("Create", "Invoice", invoiceNumber, "", null, data);
     }
 
@@ -1397,11 +1663,12 @@ function renderCustomerContacts(customer) {
     const invoice = customer.invoices.find((inv) => inv.id === invoiceId);
     if (!invoice) return;
     const tbv = state.tbvs.find((t) => t.invoice_id === invoice.id && t.status === "PENDING");
-    const itemsHtml = (invoice.items || []).map((item) => `
+        const itemsHtml = (invoice.items || []).map((item) => `
       <tr>
         <td>${escapeHtml(item.product_name || "-")}</td>
         <td>${formatNumber(item.qty)}</td>
         <td>${formatPeso(item.unit_price)}</td>
+        <td>${formatPeso(item.discount_per_qty || 0)}</td>
         <td>${formatPeso(item.line_total)}</td>
       </tr>
     `).join("");
@@ -1419,12 +1686,22 @@ function renderCustomerContacts(customer) {
         <div class="invoice-meta-card"><span>PO #</span><strong>${escapeHtml(invoice.po_number || "-")}</strong></div>
         <div class="invoice-meta-card"><span>Reference</span><strong>${escapeHtml(invoice.reference_info || "-")}</strong></div>
       </div>
-      <div class="table-wrap">
+            <div class="table-wrap">
         <table class="records-table">
-          <thead><tr><th>Product Name</th><th>Quantity</th><th>Price</th><th>Line Total</th></tr></thead>
-          <tbody>${itemsHtml || `<tr><td colspan="4" class="muted">No line items.</td></tr>`}</tbody>
+          <thead><tr><th>Product Name</th><th>Quantity</th><th>Price</th><th>Discount / Qty</th><th>Line Total</th></tr></thead>
+          <tbody>${itemsHtml || `<tr><td colspan="5" class="muted">No line items.</td></tr>`}</tbody>
         </table>
       </div>
+            ${Number(invoice.discount_total_amount || 0) > 0 ? `
+        <div class="info-box" style="margin-top:16px;">
+          Subtotal: <strong>${formatPeso(invoice.subtotal_amount || invoice.total)}</strong><br>
+          Line Discounts: <strong>${formatPeso(invoice.line_discount_total || 0)}</strong><br>
+          Fixed Invoice Discount: <strong>${formatPeso(invoice.invoice_discount_amount || 0)}</strong><br>
+          Total Discount: <strong>${formatPeso(invoice.discount_total_amount || 0)}</strong><br>
+          Discount Mode: <strong>${escapeHtml(invoice.discount_mode || "none")}</strong><br>
+          Reason: <strong>${escapeHtml(invoice.discount_reason || "-")}</strong>
+        </div>
+      ` : ""}
       <div class="summary-grid" style="margin-top:16px;">
         <div class="panel summary-card"><span class="summary-label">Invoice Total</span><strong>${formatPeso(invoice.total)}</strong></div>
         <div class="panel summary-card"><span class="summary-label">Paid</span><strong>${formatPeso(invoice.paidAmount)}</strong></div>
