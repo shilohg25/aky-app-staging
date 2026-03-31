@@ -1515,9 +1515,13 @@ function renderCustomerContacts(customer) {
       cleared = false;
     }
 
-    if (isReplacementPayment) {
+        if (isReplacementPayment) {
       details.isReplacementPayment = true;
       details.replacesPaymentId = state.paymentDraft.replacementOfPaymentId || null;
+      details.replacementRootPaymentId =
+        state.paymentDraft.replacementRootPaymentId ||
+        state.paymentDraft.replacementOfPaymentId ||
+        null;
       details.replacesChequeNumber = state.paymentDraft.replacementOfChequeNumber || null;
       details.replacementOriginalAmount = state.paymentDraft.replacementOriginalAmount || null;
       details.replacementAppliedAmount = round2(state.paymentDraft.amount || 0);
@@ -1986,14 +1990,16 @@ el.execOutstanding.textContent = formatCompactPeso(
     const customer = state.customers.find((c) => c.id === bouncedPayment.customer_id);
     if (!customer) return alert("Customer not found.");
 
-    const bouncedDetails = getPaymentDetailsObject(bouncedPayment);
+        const bouncedDetails = getPaymentDetailsObject(bouncedPayment);
+    const replacementRootPaymentId =
+      bouncedDetails.replacementRootPaymentId || bouncedPayment.id;
 
     state.selectedCustomerId = customer.id;
     renderCustomerList();
     renderCurrentCustomerDashboard();
     setView("customers");
 
-    state.paymentDraft = {
+        state.paymentDraft = {
       mode: "replacement",
       amount: replacementState.remainingTotal,
       allocations: replacementState.remainingItems.map((item) => ({
@@ -2001,6 +2007,7 @@ el.execOutstanding.textContent = formatCompactPeso(
         amount: item.remainingAmount
       })),
       replacementOfPaymentId: bouncedPayment.id,
+      replacementRootPaymentId: replacementRootPaymentId,
       replacementOfChequeNumber: bouncedDetails.chequeNumber || "",
       replacementOriginalAmount: replacementState.originalTotal,
       replacementRemainingAmount: replacementState.remainingTotal
@@ -2720,8 +2727,12 @@ function renderLogSortIndicators() {
     function formatPaymentDetails(payment) {
     const details = getPaymentDetailsObject(payment);
 
-    const replacementText = details.isReplacementPayment
+        const replacementText = details.isReplacementPayment
       ? ` | Replaces bounced cheque #${details.replacesChequeNumber || "-"}`
+      : "";
+
+    const rootText = details.isReplacementPayment && details.replacementRootPaymentId
+      ? ` | Root Ref: ${details.replacementRootPaymentId}`
       : "";
 
     if (payment.method === "Cash") {
