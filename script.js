@@ -385,20 +385,46 @@ el.generateSoaBtn.addEventListener("click", generateSoa);
     el.appShell.classList.add("hidden");
   }
 
+    function renderLazyView(view) {
+    if (view === "executive" && canViewExecutive()) {
+      renderExecutiveView();
+      return;
+    }
+
+    if (view === "notifications" && canViewNotifications()) {
+      renderNotificationsView();
+      return;
+    }
+
+    if (view === "cheque-register") {
+      renderChequeRegisterView();
+      return;
+    }
+
+    if (view === "reports") {
+      renderReportsView();
+      return;
+    }
+
+    if (view === "logs" && canViewLogs()) {
+      renderLogs();
+      return;
+    }
+
+    if (view === "accounts" && canManageAccounts()) {
+      renderAccountsView();
+    }
+  }
+
   async function showApp() {
     el.loginScreen.classList.add("hidden");
     el.appShell.classList.remove("hidden");
     renderCurrentUser();
     await loadAllData();
     if (canManageAccounts()) await loadAccounts();
-        renderCustomerList();
+
+    renderCustomerList();
     renderCurrentCustomerDashboard();
-    renderExecutiveView();
-    renderNotificationsView();
-    renderChequeRegisterView();
-    renderLogs();
-    renderReportsView();
-    renderAccountsView();
     setView(state.currentView);
   }
 
@@ -653,43 +679,72 @@ el.generateSoaBtn.addEventListener("click", generateSoa);
     el.createSOABtn.classList.toggle("hidden", !canGenerateSoa());
   }
 
-  function setView(view) {
+    function setView(view) {
     state.currentView = view;
 
-    [el.customersView, el.executiveView, el.notificationsView, el.chequeRegisterView, el.reportsView, el.logView, el.accountsView].forEach((v) => v.classList.add("hidden"));
-[el.navCustomers, el.navExecutive, el.navNotifications, el.navChequeRegister, el.navReports, el.navLogs, el.navAccounts].forEach((b) => b.classList.remove("active"));
+    [
+      el.customersView,
+      el.executiveView,
+      el.notificationsView,
+      el.chequeRegisterView,
+      el.reportsView,
+      el.logView,
+      el.accountsView
+    ].forEach((v) => v.classList.add("hidden"));
+
+    [
+      el.navCustomers,
+      el.navExecutive,
+      el.navNotifications,
+      el.navChequeRegister,
+      el.navReports,
+      el.navLogs,
+      el.navAccounts
+    ].forEach((b) => b.classList.remove("active"));
 
     if (view === "customers") {
       el.customersView.classList.remove("hidden");
       el.navCustomers.classList.add("active");
       return;
     }
+
     if (view === "executive" && canViewExecutive()) {
+      renderLazyView("executive");
       el.executiveView.classList.remove("hidden");
       el.navExecutive.classList.add("active");
       return;
     }
+
     if (view === "notifications" && canViewNotifications()) {
+      renderLazyView("notifications");
       el.notificationsView.classList.remove("hidden");
       el.navNotifications.classList.add("active");
       return;
     }
+
     if (view === "cheque-register") {
-  el.chequeRegisterView.classList.remove("hidden");
-  el.navChequeRegister.classList.add("active");
-  return;
-}
+      renderLazyView("cheque-register");
+      el.chequeRegisterView.classList.remove("hidden");
+      el.navChequeRegister.classList.add("active");
+      return;
+    }
+
     if (view === "reports") {
+      renderLazyView("reports");
       el.reportsView.classList.remove("hidden");
       el.navReports.classList.add("active");
       return;
     }
+
     if (view === "logs" && canViewLogs()) {
+      renderLazyView("logs");
       el.logView.classList.remove("hidden");
       el.navLogs.classList.add("active");
       return;
     }
+
     if (view === "accounts" && canManageAccounts()) {
+      renderLazyView("accounts");
       el.accountsView.classList.remove("hidden");
       el.navAccounts.classList.add("active");
       return;
@@ -3482,17 +3537,16 @@ function renderLogSortIndicators() {
     renderCurrentCustomerDashboard();
   }
 
-  async function refreshAndRenderAll() {
+    async function refreshAndRenderAll() {
     await loadAllData();
     if (canManageAccounts()) await loadAccounts();
+
     renderCustomerList();
     renderCurrentCustomerDashboard();
-    renderExecutiveView();
-    renderNotificationsView();
-    renderChequeRegisterView();
-    renderLogs();
-    renderReportsView();
-    renderAccountsView();
+
+    if (state.currentView !== "customers") {
+      renderLazyView(state.currentView);
+    }
   }
 
   function openModal(node) { node.style.display = "flex"; }
