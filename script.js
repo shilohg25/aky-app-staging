@@ -1180,7 +1180,7 @@ function renderCustomerContacts(customer) {
 
     closeModal(el.customerModal);
     state.editingCustomerId = null;
-    await refreshAndRenderAll();
+        await refreshSelectedCustomerOnly();
     alert("Customer saved successfully.");
   }
 
@@ -1717,7 +1717,7 @@ function renderCustomerContacts(customer) {
 
     closeModal(el.invoiceModal);
     state.editingInvoiceId = null;
-    await refreshAndRenderAll();
+        await refreshSelectedCustomerOnly();
     alert("Invoice saved successfully.");
   }
 
@@ -2256,7 +2256,7 @@ function renderCustomerContacts(customer) {
 
     state.paymentDraft = null;
     closeModal(el.paymentMethodModal);
-    await refreshAndRenderAll();
+        await refreshSelectedCustomerOnly();
     alert(successMessage + taxSuccessText);
   }
   function renderPaymentTable(customer) {
@@ -3392,10 +3392,100 @@ function renderLogSortIndicators() {
     }]);
   }
 
+    async function refreshSelectedCustomerOnly() {
+    const customerId = state.selectedCustomerId;
+
+    if (!customerId) {
+      await loadAllData();
+      if (canManageAccounts()) await loadAccounts();
+      renderCustomerList();
+      renderCurrentCustomerDashboard();
+      return;
+    }
+
+    const previousInvoiceIds = state.invoices
+      .filter((invoice) => invoice.customer_id === customerId)
+      .map((invoice) => invoice.id);
+
+    const previousPaymentIds = state.payments
+      .filter((payment) => payment.customer_id === customerId)
+      .map((payment) => payment.id);
+
+    const [customerRes, contactsRes, invoicesRes, paymentsRes] = await Promise.all([
+      supabaseClient.from("customers").select("*").eq("id", customerId).maybeSingle(),
+      supabaseClient.from("customer_contacts").select("*").eq("customer_id", customerId).order("created_at", { ascending: true }),
+      supabaseClient.from("invoices").select("*").eq("customer_id", customerId).order("invoice_date", { ascending: false }),
+      supabaseClient.from("payments").select("*").eq("customer_id", customerId).order("payment_date", { ascending: false })
+    ]);
+
+    if (customerRes.error) return alert(customerRes.error.message);
+    if (contactsRes.error) return alert(contactsRes.error.message);
+    if (invoicesRes.error) return alert(invoicesRes.error.message);
+    if (paymentsRes.error) return alert(paymentsRes.error.message);
+
+    const freshInvoices = invoicesRes.data || [];
+    const freshPayments = paymentsRes.data || [];
+    const freshInvoiceIds = freshInvoices.map((invoice) => invoice.id);
+    const freshPaymentIds = freshPayments.map((payment) => payment.id);
+
+    const [invoiceItemsRes, allocationsRes, tbvsRes] = await Promise.all([
+      freshInvoiceIds.length
+        ? supabaseClient.from("invoice_items").select("*").in("invoice_id", freshInvoiceIds).order("created_at", { ascending: true })
+        : Promise.resolve({ data: [], error: null }),
+      freshPaymentIds.length
+        ? supabaseClient.from("payment_allocations").select("*").in("payment_id", freshPaymentIds)
+        : Promise.resolve({ data: [], error: null }),
+      freshInvoiceIds.length
+        ? supabaseClient.from("invoice_void_requests").select("*").in("invoice_id", freshInvoiceIds).order("created_at", { ascending: false })
+        : Promise.resolve({ data: [], error: null })
+    ]);
+
+    if (invoiceItemsRes.error) return alert(invoiceItemsRes.error.message);
+    if (allocationsRes.error) return alert(allocationsRes.error.message);
+    if (tbvsRes.error) return alert(tbvsRes.error.message);
+
+    const invoiceIdsToReplace = new Set([...previousInvoiceIds, ...freshInvoiceIds]);
+    const paymentIdsToReplace = new Set([...previousPaymentIds, ...freshPaymentIds]);
+
+    state.customers = state.customers.filter((customer) => customer.id !== customerId);
+    if (customerRes.data) {
+      state.customers.push(customerRes.data);
+    }
+
+    state.contacts = state.contacts
+      .filter((contact) => contact.customer_id !== customerId)
+      .concat(contactsRes.data || []);
+
+    state.invoices = state.invoices
+      .filter((invoice) => invoice.customer_id !== customerId)
+      .concat(freshInvoices);
+
+    state.invoiceItems = state.invoiceItems
+      .filter((item) => !invoiceIdsToReplace.has(item.invoice_id))
+      .concat(invoiceItemsRes.data || []);
+
+    state.payments = state.payments
+      .filter((payment) => payment.customer_id !== customerId)
+      .concat(freshPayments);
+
+    state.allocations = state.allocations
+      .filter((alloc) => !paymentIdsToReplace.has(alloc.payment_id))
+      .concat(allocationsRes.data || []);
+
+    state.tbvs = state.tbvs
+      .filter((tbv) => !invoiceIdsToReplace.has(tbv.invoice_id))
+      .concat(tbvsRes.data || []);
+
+    hydrateData();
+    populateReportCustomerFilter();
+    renderCustomerList();
+    renderCurrentCustomerDashboard();
+  }
+
   async function refreshAndRenderAll() {
     await loadAllData();
     if (canManageAccounts()) await loadAccounts();
-        renderCustomerList();
+    renderCustomerList();
     renderCurrentCustomerDashboard();
     renderExecutiveView();
     renderNotificationsView();
