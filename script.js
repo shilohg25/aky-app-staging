@@ -2502,7 +2502,7 @@ el.execOutstanding.textContent = formatCompactPeso(
       { payment_id: paymentId, status: "CLEARED" }
     );
 
-    await refreshAndRenderAll();
+        await refreshWorkflowViewsOnly(payment.customer_id || null);
     alert("Cheque marked as cleared.");
   }
 
@@ -2548,7 +2548,7 @@ el.execOutstanding.textContent = formatCompactPeso(
       { payment_id: paymentId, status: "BOUNCED" }
     );
 
-    await refreshAndRenderAll();
+        await refreshWorkflowViewsOnly(payment.customer_id || null);
     alert("Cheque marked as bounced.");
   }
   function getPaymentDetailsObject(payment) {
@@ -3047,7 +3047,7 @@ el.execOutstanding.textContent = formatCompactPeso(
     await addLog("Create", "TBV Request", invoice?.invoice_number || "Invoice", explanation, null, { invoice_id: invoiceId, explanation });
     closeModal(el.tbvModal);
     state.selectedInvoiceForTbv = null;
-    await refreshAndRenderAll();
+        await refreshWorkflowViewsOnly(invoice?.customer_id || null);
     alert("TBV request submitted.");
   }
 
@@ -3089,7 +3089,7 @@ el.execOutstanding.textContent = formatCompactPeso(
     }
     closeModal(el.tbvDecisionModal);
     state.selectedTbvForDecision = null;
-    await refreshAndRenderAll();
+        await refreshWorkflowViewsOnly(invoice?.customer_id || null);
     alert(`TBV ${decision === "APPROVED" ? "approved" : "denied"} successfully.`);
   }
 function autofillSoaPaymentRange() {
@@ -3447,16 +3447,8 @@ function renderLogSortIndicators() {
     }]);
   }
 
-    async function refreshSelectedCustomerOnly() {
-    const customerId = state.selectedCustomerId;
-
-    if (!customerId) {
-      await loadAllData();
-      if (canManageAccounts()) await loadAccounts();
-      renderCustomerList();
-      renderCurrentCustomerDashboard();
-      return;
-    }
+      async function refreshCustomerData(customerId) {
+    if (!customerId) return;
 
     const previousInvoiceIds = state.invoices
       .filter((invoice) => invoice.customer_id === customerId)
@@ -3533,11 +3525,61 @@ function renderLogSortIndicators() {
 
     hydrateData();
     populateReportCustomerFilter();
+  }
+
+  async function refreshSelectedCustomerOnly() {
+    const customerId = state.selectedCustomerId;
+
+    if (!customerId) {
+      await loadAllData();
+      if (canManageAccounts()) await loadAccounts();
+      renderCustomerList();
+      renderCurrentCustomerDashboard();
+      return;
+    }
+
+    await refreshCustomerData(customerId);
     renderCustomerList();
     renderCurrentCustomerDashboard();
   }
 
-    async function refreshAndRenderAll() {
+  async function refreshWorkflowViewsOnly(customerId = null) {
+    const targetCustomerId = customerId || state.selectedCustomerId || null;
+
+    if (targetCustomerId) {
+      await refreshCustomerData(targetCustomerId);
+    }
+
+    const { data: logsData, error: logsError } = await supabaseClient
+      .from("activity_logs")
+      .select("*")
+      .order("created_at", { ascending: false })
+      .limit(500);
+
+    if (logsError) return alert(logsError.message);
+
+    state.logs = logsData || [];
+
+    renderCustomerList();
+
+    if (state.selectedCustomerId) {
+      renderCurrentCustomerDashboard();
+    }
+
+    if (state.currentView === "notifications") {
+      renderNotificationsView();
+    }
+
+    if (state.currentView === "cheque-register") {
+      renderChequeRegisterView();
+    }
+
+    if (state.currentView === "logs") {
+      renderLogs();
+    }
+  }
+
+  async function refreshAndRenderAll() {
     await loadAllData();
     if (canManageAccounts()) await loadAccounts();
 
