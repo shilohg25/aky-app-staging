@@ -549,28 +549,53 @@ el.generateSoaBtn.addEventListener("click", generateSoa);
   }
 
   async function saveOwnPassword() {
-    const password = el.newOwnPassword.value;
-    const confirm = el.confirmOwnPassword.value;
-    const validationError = validatePassword(password);
+  const password = el.newOwnPassword.value;
+  const confirm = el.confirmOwnPassword.value;
+  const validationError = validatePassword(password);
 
-    if (validationError) return alert(validationError);
-    if (password !== confirm) return alert("Passwords do not match.");
+  if (validationError) return alert(validationError);
+  if (password !== confirm) return alert("Passwords do not match.");
 
-    const { error: authError } = await supabaseClient.auth.updateUser({ password });
-    if (authError) return alert(authError.message);
+  const { data: sessionData, error: sessionError } = await supabaseClient.auth.getSession();
+  if (sessionError) return alert(sessionError.message);
 
-    const { error: profileError } = await supabaseClient
-      .from("profiles")
-      .update({ must_change_password: false })
-      .eq("id", state.currentProfile.id);
+  let activeSession = sessionData.session || null;
 
-    if (profileError) return alert(profileError.message);
+  if (!activeSession) {
+    const { data: refreshData, error: refreshError } = await supabaseClient.auth.refreshSession();
 
-    state.currentProfile.must_change_password = false;
-    closeModal(el.changePasswordModal);
-    renderCurrentUser();
-    alert("Password changed successfully.");
+    if (refreshError) {
+      console.error(refreshError);
+    }
+
+    activeSession = refreshData?.session || null;
   }
+
+  if (!activeSession) {
+    await supabaseClient.auth.signOut();
+    state.currentProfile = null;
+    state.selectedCustomerId = null;
+    closeModal(el.changePasswordModal);
+    showLogin();
+    el.loginMessage.textContent = "Your login session is missing. Please log in again using the temporary password, then change it immediately.";
+    return;
+  }
+
+  const { error: authError } = await supabaseClient.auth.updateUser({ password });
+  if (authError) return alert(authError.message);
+
+  const { error: profileError } = await supabaseClient
+    .from("profiles")
+    .update({ must_change_password: false })
+    .eq("id", state.currentProfile.id);
+
+  if (profileError) return alert(profileError.message);
+
+  state.currentProfile.must_change_password = false;
+  closeModal(el.changePasswordModal);
+  renderCurrentUser();
+  alert("Password changed successfully.");
+}
 
   async function loadAllData() {
     const [customersRes, contactsRes, invoicesRes, invoiceItemsRes, paymentsRes, allocationsRes, logsRes, tbvsRes] = await Promise.all([
