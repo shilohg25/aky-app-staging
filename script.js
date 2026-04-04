@@ -376,7 +376,8 @@ el.generateSoaBtn.addEventListener("click", generateSoa);
     state.currentProfile = profile;
     await showApp();
 
-    if (profile.must_change_password) openChangePasswordModal(true);
+    // Staging: do not auto-open forced password change on login.
+// if (profile.must_change_password) openChangePasswordModal(true);
   }
 
   async function getProfile(userId) {
@@ -527,7 +528,8 @@ el.generateSoaBtn.addEventListener("click", generateSoa);
     el.loginPassword.value = "";
     await showApp();
 
-    if (profile.must_change_password) openChangePasswordModal(true);
+    // Staging: do not auto-open forced password change on login.
+// if (profile.must_change_password) openChangePasswordModal(true);
   }
 
   async function logout() {
