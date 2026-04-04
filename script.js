@@ -1353,6 +1353,7 @@ function renderCustomerContacts(customer) {
   el.referenceInfo.value = "";
   el.lineItemsContainer.innerHTML = "";
   el.invoiceTotalAmount.textContent = formatPeso(0);
+  clearInvoiceDocumentDraft(false);
 
   const breakdownBox = document.getElementById("invoiceDiscountBreakdown");
   if (breakdownBox) {
@@ -1632,6 +1633,65 @@ function renderCustomerContacts(customer) {
       return existingKey === targetKey;
     }) || null;
   }
+    const invoiceDocumentState = {
+      .trim()
+      .replace(/\s+/g, "-")
+      .replace(/[^a-zA-Z0-9._-]/g, "");
+
+    return cleaned || `invoice-document-${Date.now()}.png`;
+  }
+
+  async function saveInvoiceDocumentToVault({ customerId, invoiceId, invoiceNumber, notes }) {
+    if (!invoiceDocumentState.file) return false;
+
+    const { data: authData, error: authError } = await supabaseClient.auth.getUser();
+    if (authError || !authData?.user?.id) {
+      throw new Error("Could not identify the signed-in user for the invoice document.");
+    }
+
+    const invoiceNumberKey = normalizeInvoiceNumberForKey(invoiceNumber) || `invoice-${Date.now()}`;
+    const safeOriginalName = invoiceDocumentSafeFileName(invoiceDocumentState.file.name);
+    const storagePath = `${customerId}/${new Date().toISOString().slice(0, 10)}/invoice-${invoiceNumberKey}-${Date.now()}-${safeOriginalName}`;
+
+    const { error: uploadError } = await supabaseClient.storage
+      .from("customer-documents")
+      .upload(storagePath, invoiceDocumentState.file, {
+        cacheControl: "3600",
+        upsert: false,
+        contentType: invoiceDocumentState.file.type || "image/png"
+      });
+
+    if (uploadError) {
+      throw new Error(uploadError.message || "Invoice document upload failed.");
+    }
+
+    const { error: insertError } = await supabaseClient
+      .from("customer_documents")
+      .insert({
+        customer_id: customerId,
+        invoice_id: invoiceId,
+        payment_id: null,
+        origin_screen: "invoice_modal",
+        category: "invoice",
+        title: invoiceNumber,
+        reference_code: invoiceNumber,
+        notes: notes || null,
+        file_name: invoiceDocumentState.file.name,
+        mime_type: invoiceDocumentState.file.type || "image/png",
+        file_size: invoiceDocumentState.file.size,
+        storage_path: storagePath,
+        source: invoiceDocumentState.source,
+        uploaded_by: authData.user.id
+      });
+
+    if (insertError) {
+      await supabaseClient.storage.from("customer-documents").remove([storagePath]);
+      throw new Error(insertError.message || "Invoice document record could not be saved.");
+    }
+
+    clearInvoiceDocumentDraft(true);
+    return true;
+  }
       async function saveInvoice() {
     const customer = getSelectedCustomer();
     if (!customer) return;
@@ -1640,6 +1700,7 @@ function renderCustomerContacts(customer) {
     const invoiceDate = el.invoiceDate.value;
     const poNumber = el.poNumber.value.trim();
     const referenceInfo = el.referenceInfo.value.trim();
+    const invoiceDocumentNotes = document.getElementById("invoiceDocumentNotes")?.value.trim() || null;
 
     if (!invoiceNumber) return alert("Invoice number is required.");
     if (!invoiceDate) return alert("Invoice date is required.");
@@ -1692,114 +1753,15 @@ function renderCustomerContacts(customer) {
     }));
 
     const total = editorState.totalAmount;
+    let savedInvoiceId = state.editingInvoiceId || null;
+    let documentMessage = "";
+
     if (state.editingInvoiceId) {
       if (!canEditInvoice()) return;
 
       const editNote = el.editRequiredNote.value.trim();
       if (editNoteRequired() && !editNote) return alert("Edit note is required for admin edits.");
 
-      const oldInvoice = state.invoices.find((x) => x.id === state.editingInvoiceId);
-      if (!oldInvoice) return alert("Invoice not found.");
-
-      if (!canEditInvoiceRecord(oldInvoice)) {
-        return alert("Admin cannot edit partially paid or paid invoices.");
-      }
-
-      const paidAmount = Number(oldInvoice.paidAmount || 0);
-      const balanceAmount = round2(Math.max(0, total - paidAmount));
-      const primaryStatus = balanceAmount <= 0 ? "PAID" : balanceAmount < total ? "PARTIALLY_PAID" : "UNPAID";
-
-      const { error } = await supabaseClient
-        .from("invoices")
-        .update({
-          invoice_number: invoiceNumber,
-          invoice_number_key: invoiceNumberKey,
-          invoice_date: invoiceDate,
-          po_number: poNumber || null,
-          reference_info: referenceInfo || null,
-          subtotal_amount: editorState.subtotalAmount,
-          line_discount_total: editorState.discountTotalAmount,
-          invoice_discount_amount: 0,
-          discount_total_amount: editorState.discountTotalAmount,
-          discount_mode: editorState.discountTotalAmount > 0 ? "per_qty" : "none",
-          discount_reason: null,
-          total_amount: total,
-          balance_amount: balanceAmount,
-          primary_status: primaryStatus,
-          updated_at: new Date().toISOString()
-        })
-        .eq("id", state.editingInvoiceId);
-
-      if (error) return alert(error.message);
-
-      const { error: deleteItemsError } = await supabaseClient
-        .from("invoice_items")
-        .delete()
-        .eq("invoice_id", state.editingInvoiceId);
-
-      if (deleteItemsError) return alert(deleteItemsError.message);
-
-      const { error: itemError } = await supabaseClient
-        .from("invoice_items")
-        .insert(items.map((i) => ({ ...i, invoice_id: state.editingInvoiceId })));
-
-      if (itemError) return alert(itemError.message);
-
-      await addLog("Edit", "Invoice", invoiceNumber, editNote, oldInvoice, {
-        invoice_number: invoiceNumber,
-        invoice_date: invoiceDate,
-        po_number: poNumber,
-        reference_info: referenceInfo,
-        subtotal_amount: editorState.subtotalAmount,
-        discount_total_amount: editorState.discountTotalAmount,
-        total_amount: total
-      });
-    
-    } else {
-      if (!canCreateInvoice()) return;
-
-      const { data, error } = await supabaseClient
-        .from("invoices")
-        .insert([{
-          customer_id: customer.id,
-          invoice_number: invoiceNumber,
-          invoice_number_key: invoiceNumberKey,
-          invoice_date: invoiceDate,
-          po_number: poNumber || null,
-          reference_info: referenceInfo || null,
-          subtotal_amount: editorState.subtotalAmount,
-          line_discount_total: editorState.discountTotalAmount,
-          invoice_discount_amount: 0,
-          discount_total_amount: editorState.discountTotalAmount,
-          discount_mode: editorState.discountTotalAmount > 0 ? "per_qty" : "none",
-          discount_reason: null,
-          total_amount: total,
-          paid_amount: 0,
-          balance_amount: total,
-          primary_status: "UNPAID",
-          payment_notice_status: "NONE",
-          created_by: state.currentProfile.id,
-          is_voided: false
-        }])
-        .select()
-        .single();
-
-      if (error) return alert(error.message);
-
-      const { error: itemError } = await supabaseClient
-        .from("invoice_items")
-        .insert(items.map((i) => ({ ...i, invoice_id: data.id })));
-
-      if (itemError) return alert(itemError.message);
-
-      await addLog("Create", "Invoice", invoiceNumber, "", null, data);
-  
-    }
-
-    closeModal(el.invoiceModal);
-    state.editingInvoiceId = null;
-        await refreshSelectedCustomerOnly();
-    alert("Invoice saved successfully.");
   }
 
   function viewInvoice(invoiceId) {
@@ -4436,7 +4398,7 @@ function formatCompactPeso(value) {
       tableBody.innerHTML = `<tr><td colspan="7" class="muted">Select a customer first.</td></tr>`;
       return;
     }
-
+window.AKY_loadCustomerDocuments = loadCustomerDocuments;
     tableBody.innerHTML = `<tr><td colspan="7" class="muted">Loading documents...</td></tr>`;
 
     const { data, error } = await supabaseClient
