@@ -149,17 +149,17 @@
             <div class="table-wrap customer-table-scroll">
               <table class="records-table">
                 <thead>
-                  <tr>
   <tr>
-  <th>Date</th>
-  <th>Type</th>
-  <th>Method</th>
-  <th>Details</th>
-  <th>Gross Amount</th>
-  <th>Applied To</th>
-  <th>Created By</th>
-  <th>Details</th>
-</tr>
+    <th>Date</th>
+    <th>Type</th>
+    <th>Method</th>
+    <th>Details</th>
+    <th>Gross Amount</th>
+    <th>Applied To</th>
+    <th>Created By</th>
+    <th>Details</th>
+  </tr>
+</thead>
 
                 </thead>
                 <tbody id="paymentTableBody"></tbody>
@@ -758,7 +758,15 @@
     <div id="paymentViewContent"></div>
   </div>
 </div>
-
+<div id="paymentViewModal" class="modal">
+  <div class="modal-content large-modal">
+    <div class="modal-header">
+      <h3>Payment Details</h3>
+      <button id="closePaymentViewModalBtn" class="icon-btn" type="button">&times;</button>
+    </div>
+    <div id="paymentViewContent"></div>
+  </div>
+</div>
   <div id="paymentTypeModal" class="modal">
     <div class="modal-content medium-modal">
       <div class="modal-header">
