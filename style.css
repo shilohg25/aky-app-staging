@@ -1112,3 +1112,14 @@ textarea {
 .login-brand .aky-logo-img {
   width: 220px;
 }
+.aky-logo-img {
+  display: block;
+  width: 180px;
+  max-width: 100%;
+  height: auto;
+  object-fit: contain;
+}
+
+.login-brand .aky-logo-img {
+  width: 220px;
+}
