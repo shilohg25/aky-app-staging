@@ -4344,7 +4344,6 @@ function formatCompactPeso(value) {
     `;
   }
   // ===== End AI Document Assist =====
-})();
   // ===== Document Vault =====
   const documentVaultState = {
     file: null,
