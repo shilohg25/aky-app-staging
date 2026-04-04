@@ -163,6 +163,87 @@
               </table>
             </div>
           </div>
+                    <div class="panel">
+            <div class="panel-row">
+              <div>
+                <h3 class="panel-title">Document Vault</h3>
+                <p id="docVaultCustomerHint" class="muted">Select a customer to view or save supporting documents.</p>
+              </div>
+            </div>
+
+            <div id="docVaultUploader" class="panel soft-panel hidden" style="margin-bottom:16px;">
+              <div class="panel-row">
+                <h4 class="panel-title small-title">Save Document</h4>
+                <label class="doc-upload-btn">
+                  <input id="customerDocumentFileInput" type="file" accept="image/*" hidden />
+                  Choose image
+                </label>
+              </div>
+
+              <div class="form-grid two-col">
+                <div class="field">
+                  <label for="customerDocumentCategory">Category *</label>
+                  <select id="customerDocumentCategory">
+                    <option value="invoice">Invoice</option>
+                    <option value="payment_proof">Payment Proof</option>
+                    <option value="cheque">Cheque</option>
+                    <option value="other">Other</option>
+                  </select>
+                </div>
+
+                <div class="field">
+                  <label for="customerDocumentReference">Reference Code</label>
+                  <input id="customerDocumentReference" type="text" placeholder="Invoice #, cheque #, OR number, etc." />
+                </div>
+
+                <div class="field">
+                  <label for="customerDocumentTitle">Title</label>
+                  <input id="customerDocumentTitle" type="text" placeholder="Optional short title" />
+                </div>
+
+                <div class="field">
+                  <label for="customerDocumentNotes">Notes</label>
+                  <textarea id="customerDocumentNotes" rows="3" placeholder="Optional investigation note"></textarea>
+                </div>
+              </div>
+
+              <div id="customerDocumentPasteZone" class="doc-paste-zone" tabindex="0">
+                Click here, then press Ctrl + V to paste a screenshot or snippet.
+              </div>
+
+              <div id="customerDocumentPreviewWrap" class="doc-preview-wrap hidden">
+                <img id="customerDocumentPreviewImg" class="doc-preview-img" alt="Document preview" />
+              </div>
+
+              <div class="btn-row" style="margin-top:12px;">
+                <button id="saveCustomerDocumentBtn" class="btn btn-primary" type="button">Save Document</button>
+                <button id="clearCustomerDocumentBtn" class="btn btn-light" type="button">Clear</button>
+              </div>
+
+              <div id="customerDocumentStatus" class="info-box" style="margin-top:12px;">
+                Choose an image or paste a screenshot. Max 6MB.
+              </div>
+            </div>
+
+            <div class="table-wrap customer-table-scroll">
+              <table class="records-table">
+                <thead>
+                  <tr>
+                    <th>Uploaded</th>
+                    <th>Category</th>
+                    <th>Title</th>
+                    <th>Reference</th>
+                    <th>Source</th>
+                    <th>Size</th>
+                    <th>Actions</th>
+                  </tr>
+                </thead>
+                <tbody id="customerDocumentsTableBody">
+                  <tr><td colspan="7" class="muted">Select a customer first.</td></tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
         </div>
       </section>
 
