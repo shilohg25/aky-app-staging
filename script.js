@@ -3885,20 +3885,42 @@ function formatCompactPeso(value) {
   }
 
   async function callAiDocumentAssist(payload) {
-    const { data, error } = await supabaseClient.functions.invoke("ai-document-assist", {
-      body: payload
-    });
+  const { data, error } = await supabaseClient.functions.invoke("ai-document-assist", {
+    body: payload
+  });
 
-    if (error) {
+  if (error) {
+    try {
+      if (error.context) {
+        const rawText = await error.context.text();
+
+        try {
+          const parsed = JSON.parse(rawText);
+          throw new Error(
+            parsed?.error ||
+            parsed?.details ||
+            parsed?.message ||
+            rawText ||
+            error.message ||
+            "AI function call failed."
+          );
+        } catch (jsonParseError) {
+          throw new Error(rawText || error.message || "AI function call failed.");
+        }
+      }
+
       throw new Error(error.message || "AI function call failed.");
+    } catch (innerError) {
+      throw new Error(innerError.message || error.message || "AI function call failed.");
     }
-
-    if (!data?.ok) {
-      throw new Error(data?.error || "AI extraction failed.");
-    }
-
-    return data.result;
   }
+
+  if (!data?.ok) {
+    throw new Error(data?.error || "AI extraction failed.");
+  }
+
+  return data.result;
+}
 
   async function analyzeInvoiceDocumentWithAi() {
     const statusBox = document.getElementById("invoiceAiStatus");
