@@ -2142,6 +2142,20 @@ async function saveInvoice() {
       <div class="invoice-meta-card"><span>Reference</span><strong>${escapeHtml(invoice.reference_info || "-")}</strong></div>
     </div>
 
+    <div class="panel" style="margin-bottom:16px;">
+      <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:12px;">
+        <strong>Invoice Document</strong>
+        <span class="muted">Latest linked upload</span>
+      </div>
+      <div
+        id="invoiceDocumentPreviewSlot"
+        data-invoice-id="${invoice.id}"
+        style="min-height:120px;display:flex;align-items:center;justify-content:center;background:#f8fbff;border:1px solid var(--line);border-radius:14px;padding:14px;"
+      >
+        <span class="muted">Loading invoice document...</span>
+      </div>
+    </div>
+
     <div class="table-wrap">
       <table class="records-table">
         <thead>
@@ -2194,6 +2208,100 @@ async function saveInvoice() {
     closeModal(el.invoiceViewModal);
     openTbvModal(invoice.id);
   });
+
+  void (async () => {
+    const previewSlot = document.getElementById("invoiceDocumentPreviewSlot");
+    if (!previewSlot) return;
+
+    try {
+      const { data: docs, error: docsError } = await supabaseClient
+        .from("customer_documents")
+        .select("id, storage_path, mime_type, title, file_name, uploaded_at")
+        .eq("customer_id", customer.id)
+        .eq("invoice_id", invoice.id)
+        .order("uploaded_at", { ascending: false })
+        .limit(1);
+
+      if (docsError) {
+        throw new Error(docsError.message || "Could not load invoice document record.");
+      }
+
+      const doc = Array.isArray(docs) && docs.length ? docs[0] : null;
+
+      if (!doc?.storage_path) {
+        previewSlot.innerHTML = `<div class="muted">No uploaded invoice image for this invoice yet.</div>`;
+        return;
+      }
+
+      const { data: fileBlob, error: fileError } = await supabaseClient.storage
+        .from("customer-documents")
+        .download(doc.storage_path);
+
+      if (fileError || !fileBlob) {
+        throw new Error(fileError?.message || "Could not load invoice document file.");
+      }
+
+      const currentSlot = document.getElementById("invoiceDocumentPreviewSlot");
+      if (!currentSlot || currentSlot.getAttribute("data-invoice-id") !== String(invoice.id)) {
+        return;
+      }
+
+      if (window.__akyInvoicePreviewUrl) {
+        URL.revokeObjectURL(window.__akyInvoicePreviewUrl);
+      }
+
+      const blobUrl = URL.createObjectURL(fileBlob);
+      window.__akyInvoicePreviewUrl = blobUrl;
+
+      const safeTitle = escapeHtml(doc.title || doc.file_name || invoice.invoice_number || "Invoice document");
+      const safeFileName = escapeHtml(doc.file_name || "invoice-document");
+      const isImage = String(doc.mime_type || "").toLowerCase().startsWith("image/");
+
+      if (!isImage) {
+        currentSlot.innerHTML = `
+          <div style="width:100%;text-align:center;">
+            <div class="muted" style="margin-bottom:12px;">A linked document exists, but it is not an image preview.</div>
+            <div style="font-weight:700;margin-bottom:12px;">${safeTitle}</div>
+            <button class="btn btn-light" type="button" id="invoiceDocumentOpenBtn">Open Document</button>
+          </div>
+        `;
+
+        document.getElementById("invoiceDocumentOpenBtn")?.addEventListener("click", () => {
+          window.open(blobUrl, "_blank", "noopener,noreferrer");
+        });
+
+        return;
+      }
+
+      currentSlot.innerHTML = `
+        <div style="width:100%;">
+          <div class="muted" style="margin-bottom:10px;">${safeFileName}</div>
+          <img
+            src="${blobUrl}"
+            alt="${safeTitle}"
+            style="display:block;width:100%;max-height:480px;object-fit:contain;border:1px solid var(--line);border-radius:12px;background:#ffffff;"
+          />
+          <div class="btn-row" style="margin-top:12px;">
+            <button class="btn btn-light" type="button" id="invoiceDocumentOpenBtn">Open Full Image</button>
+          </div>
+        </div>
+      `;
+
+      document.getElementById("invoiceDocumentOpenBtn")?.addEventListener("click", () => {
+        window.open(blobUrl, "_blank", "noopener,noreferrer");
+      });
+    } catch (error) {
+      const currentSlot = document.getElementById("invoiceDocumentPreviewSlot");
+      if (!currentSlot || currentSlot.getAttribute("data-invoice-id") !== String(invoice.id)) {
+        return;
+      }
+
+      currentSlot.innerHTML = `
+        <div class="muted">Could not load invoice document.</div>
+        <div class="muted" style="margin-top:6px;">${escapeHtml(error.message || "Unknown error.")}</div>
+      `;
+    }
+  })();
 }
 
   function renderInvoiceTable(customer) {
