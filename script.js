@@ -4625,16 +4625,16 @@ function formatCompactPeso(value) {
   }
 
   async function loadCustomerDocuments() {
-    const customer = typeof getSelectedCustomer === "function" ? getSelectedCustomer() : null;
-    const tableBody = document.getElementById("customerDocumentsTableBody");
-    if (!tableBody) return;
+  const customer = typeof getSelectedCustomer === "function" ? getSelectedCustomer() : null;
+  const tableBody = document.getElementById("customerDocumentsTableBody");
+  if (!tableBody) return;
 
-    if (!customer?.id) {
-      tableBody.innerHTML = `<tr><td colspan="7" class="muted">Select a customer first.</td></tr>`;
-      return;
-    }
-window.AKY_loadCustomerDocuments = loadCustomerDocuments;
-    tableBody.innerHTML = `<tr><td colspan="7" class="muted">Loading documents...</td></tr>`;
+  if (!customer?.id) {
+    tableBody.innerHTML = `<tr><td colspan="7" class="muted">Select a customer first.</td></tr>`;
+    return;
+  }
+
+  tableBody.innerHTML = `<tr><td colspan="7" class="muted">Loading documents...</td></tr>`;
 
     const { data, error } = await supabaseClient
       .from("customer_documents")
@@ -4648,8 +4648,10 @@ window.AKY_loadCustomerDocuments = loadCustomerDocuments;
     }
 
     documentVaultState.documents = Array.isArray(data) ? data : [];
-    renderCustomerDocumentsTable();
-  }
+renderCustomerDocumentsTable();
+}
+
+window.AKY_loadCustomerDocuments = loadCustomerDocuments;
 
   function renderCustomerDocumentsTable() {
     const tableBody = document.getElementById("customerDocumentsTableBody");
