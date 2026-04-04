@@ -2600,6 +2600,190 @@ async function saveInvoice() {
     `;
   }
 
+  const paymentDocumentState = {
+    file: null,
+    previewUrl: "",
+    source: "upload"
+  };
+
+  function initPaymentDocumentFlow() {
+    const fileInput = document.getElementById("paymentDocumentFileInput");
+    const clearBtn = document.getElementById("clearPaymentDocumentBtn");
+
+    if (!fileInput || !clearBtn) return;
+
+    fileInput.addEventListener("change", (event) => {
+      const file = event.target.files?.[0];
+      if (!file) return;
+
+      try {
+        applyPaymentDocumentFile(file);
+      } catch (error) {
+        setPaymentDocumentStatus(error.message || "Could not use that file.", true);
+        fileInput.value = "";
+      }
+    });
+
+    clearBtn.addEventListener("click", () => {
+      clearPaymentDocumentDraft(true);
+    });
+
+    setPaymentDocumentStatus(
+      "Optional. Upload one payment proof image. It will be saved to Document Vault after the payment is saved.",
+      false
+    );
+  }
+
+  function applyPaymentDocumentFile(file) {
+    if (!file.type || !file.type.startsWith("image/")) {
+      throw new Error("Please upload an image file only.");
+    }
+
+    if (file.size > 6 * 1024 * 1024) {
+      throw new Error("Please keep the image under 6MB.");
+    }
+
+    if (paymentDocumentState.previewUrl) {
+      URL.revokeObjectURL(paymentDocumentState.previewUrl);
+    }
+
+    paymentDocumentState.file = file;
+    paymentDocumentState.source = "upload";
+    paymentDocumentState.previewUrl = URL.createObjectURL(file);
+
+    const previewWrap = document.getElementById("paymentDocumentPreviewWrap");
+    const previewImg = document.getElementById("paymentDocumentPreviewImg");
+
+    if (previewWrap && previewImg) {
+      previewImg.src = paymentDocumentState.previewUrl;
+      previewWrap.classList.remove("hidden");
+    }
+
+    setPaymentDocumentStatus(
+      "Image ready. When you click Finish Payment, this image will also be saved to Document Vault.",
+      false
+    );
+  }
+
+  function clearPaymentDocumentDraft(resetStatus = false) {
+    const fileInput = document.getElementById("paymentDocumentFileInput");
+    const previewWrap = document.getElementById("paymentDocumentPreviewWrap");
+    const previewImg = document.getElementById("paymentDocumentPreviewImg");
+
+    if (paymentDocumentState.previewUrl) {
+      URL.revokeObjectURL(paymentDocumentState.previewUrl);
+    }
+
+    paymentDocumentState.file = null;
+    paymentDocumentState.previewUrl = "";
+    paymentDocumentState.source = "upload";
+
+    if (fileInput) fileInput.value = "";
+    if (previewImg) previewImg.src = "";
+    if (previewWrap) previewWrap.classList.add("hidden");
+
+    if (resetStatus) {
+      setPaymentDocumentStatus(
+        "Optional. Upload one payment proof image. It will be saved to Document Vault after the payment is saved.",
+        false
+      );
+    }
+  }
+
+  function setPaymentDocumentStatus(message, isError) {
+    const statusBox = document.getElementById("paymentDocumentStatus");
+    if (!statusBox) return;
+
+    statusBox.textContent = message;
+    statusBox.classList.toggle("doc-status-error", !!isError);
+    statusBox.classList.toggle("doc-status-success", !isError);
+  }
+
+  function paymentDocumentSafeFileName(fileName) {
+    const cleaned = String(fileName || "payment-proof.png")
+      .trim()
+      .replace(/\s+/g, "-")
+      .replace(/[^a-zA-Z0-9._-]/g, "");
+
+    return cleaned || `payment-proof-${Date.now()}.png`;
+  }
+
+  function buildPaymentDocumentMeta(payment, details, method) {
+    const rawReference =
+      details?.chequeNumber ||
+      details?.referenceNumber ||
+      details?.bankAccountNumber ||
+      payment?.id ||
+      "payment";
+
+    const referenceCode = String(rawReference).trim() || "payment";
+    const title =
+      method === "Cheque"
+        ? `Cheque ${referenceCode}`
+        : method === "Online"
+          ? `Online ${referenceCode}`
+          : `Cash Payment ${payment?.payment_date || todayStr()}`;
+
+    return {
+      referenceCode,
+      title
+    };
+  }
+
+  async function savePaymentDocumentToVault({ customer, payment, details, method }) {
+    if (!paymentDocumentState.file) return false;
+
+    const { data: authData, error: authError } = await supabaseClient.auth.getUser();
+    if (authError || !authData?.user?.id) {
+      throw new Error("Could not identify the signed-in user for the payment document.");
+    }
+
+    const safeOriginalName = paymentDocumentSafeFileName(paymentDocumentState.file.name);
+    const storagePath = `${customer.id}/${new Date().toISOString().slice(0, 10)}/payment-${payment.id}-${Date.now()}-${safeOriginalName}`;
+    const { referenceCode, title } = buildPaymentDocumentMeta(payment, details, method);
+
+    const { error: uploadError } = await supabaseClient.storage
+      .from("customer-documents")
+      .upload(storagePath, paymentDocumentState.file, {
+        cacheControl: "3600",
+        upsert: false,
+        contentType: paymentDocumentState.file.type || "image/png"
+      });
+
+    if (uploadError) {
+      throw new Error(uploadError.message || "Payment document upload failed.");
+    }
+
+    const { error: insertError } = await supabaseClient
+      .from("customer_documents")
+      .insert({
+        customer_id: customer.id,
+        invoice_id: null,
+        payment_id: payment.id,
+        origin_screen: "payment_modal",
+        category: "payment",
+        title,
+        reference_code: referenceCode,
+        notes: null,
+        file_name: paymentDocumentState.file.name,
+        mime_type: paymentDocumentState.file.type || "image/png",
+        file_size: paymentDocumentState.file.size,
+        storage_path: storagePath,
+        source: paymentDocumentState.source,
+        uploaded_by: authData.user.id
+      });
+
+    if (insertError) {
+      await supabaseClient.storage.from("customer-documents").remove([storagePath]);
+      throw new Error(insertError.message || "Payment document record could not be saved.");
+    }
+
+    clearPaymentDocumentDraft(true);
+    return true;
+  }
+
+  initPaymentDocumentFlow();
+
   function openPaymentMethodStep() {
     if (!state.paymentDraft) return;
 
@@ -2611,6 +2795,7 @@ async function saveInvoice() {
     el.onlinePlatformInput.value = "";
     el.cashBankAccountInput.value = "";
     if (el.withholdingTaxAppliedInput) el.withholdingTaxAppliedInput.checked = false;
+    clearPaymentDocumentDraft(true);
 
     renderPaymentMethodFields();
     renderWithholdingTaxUi();
@@ -2755,6 +2940,21 @@ async function saveInvoice() {
       }
     }
 
+    let paymentDocumentSaved = false;
+    let paymentDocumentErrorMessage = "";
+
+    try {
+      paymentDocumentSaved = await savePaymentDocumentToVault({
+        customer,
+        payment,
+        details,
+        method
+      });
+    } catch (error) {
+      paymentDocumentErrorMessage = error.message || "Payment proof image could not be saved.";
+      clearPaymentDocumentDraft(true);
+    }
+
     const taxLogText = withholdingApplied
       ? ` | WTax ${formatPeso(details.withholdingTaxAmount)} | Net ${formatPeso(details.netReceivedAmount)}`
       : "";
@@ -2777,10 +2977,18 @@ async function saveInvoice() {
         ? "Replacement payment saved successfully."
         : "Payment saved successfully.";
 
+    const documentSuccessText = paymentDocumentSaved
+      ? " Payment proof image was also saved to Document Vault."
+      : "";
+
+    const documentErrorText = paymentDocumentErrorMessage
+      ? ` Payment was saved, but the proof image was not saved to Document Vault: ${paymentDocumentErrorMessage}`
+      : "";
+
     state.paymentDraft = null;
     closeModal(el.paymentMethodModal);
-        await refreshSelectedCustomerOnly();
-    alert(successMessage + taxSuccessText);
+    await refreshSelectedCustomerOnly();
+    alert(successMessage + taxSuccessText + documentSuccessText + documentErrorText);
   }
   function renderPaymentTable(customer) {
     el.paymentTableBody.innerHTML = "";
