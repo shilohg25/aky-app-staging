@@ -1634,135 +1634,370 @@ function renderCustomerContacts(customer) {
     }) || null;
   }
     const invoiceDocumentState = {
-      .trim()
-      .replace(/\s+/g, "-")
-      .replace(/[^a-zA-Z0-9._-]/g, "");
+  file: null,
+  previewUrl: "",
+  source: "upload"
+};
 
-    return cleaned || `invoice-document-${Date.now()}.png`;
-  }
+function initInvoiceDocumentFlow() {
+  const fileInput = document.getElementById("invoiceDocumentFileInput");
+  const clearBtn = document.getElementById("clearInvoiceDocumentBtn");
 
-  async function saveInvoiceDocumentToVault({ customerId, invoiceId, invoiceNumber, notes }) {
-    if (!invoiceDocumentState.file) return false;
+  if (!fileInput || !clearBtn) return;
 
-    const { data: authData, error: authError } = await supabaseClient.auth.getUser();
-    if (authError || !authData?.user?.id) {
-      throw new Error("Could not identify the signed-in user for the invoice document.");
+  fileInput.addEventListener("change", (event) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    try {
+      applyInvoiceDocumentFile(file);
+    } catch (error) {
+      setInvoiceDocumentStatus(error.message || "Could not use that file.", true);
+      fileInput.value = "";
     }
+  });
 
-    const invoiceNumberKey = normalizeInvoiceNumberForKey(invoiceNumber) || `invoice-${Date.now()}`;
-    const safeOriginalName = invoiceDocumentSafeFileName(invoiceDocumentState.file.name);
-    const storagePath = `${customerId}/${new Date().toISOString().slice(0, 10)}/invoice-${invoiceNumberKey}-${Date.now()}-${safeOriginalName}`;
-
-    const { error: uploadError } = await supabaseClient.storage
-      .from("customer-documents")
-      .upload(storagePath, invoiceDocumentState.file, {
-        cacheControl: "3600",
-        upsert: false,
-        contentType: invoiceDocumentState.file.type || "image/png"
-      });
-
-    if (uploadError) {
-      throw new Error(uploadError.message || "Invoice document upload failed.");
-    }
-
-    const { error: insertError } = await supabaseClient
-      .from("customer_documents")
-      .insert({
-        customer_id: customerId,
-        invoice_id: invoiceId,
-        payment_id: null,
-        origin_screen: "invoice_modal",
-        category: "invoice",
-        title: invoiceNumber,
-        reference_code: invoiceNumber,
-        notes: notes || null,
-        file_name: invoiceDocumentState.file.name,
-        mime_type: invoiceDocumentState.file.type || "image/png",
-        file_size: invoiceDocumentState.file.size,
-        storage_path: storagePath,
-        source: invoiceDocumentState.source,
-        uploaded_by: authData.user.id
-      });
-
-    if (insertError) {
-      await supabaseClient.storage.from("customer-documents").remove([storagePath]);
-      throw new Error(insertError.message || "Invoice document record could not be saved.");
-    }
-
+  clearBtn.addEventListener("click", () => {
     clearInvoiceDocumentDraft(true);
-    return true;
+  });
+
+  setInvoiceDocumentStatus(
+    "Optional. Upload an image. It will be saved to Document Vault using the invoice number after the invoice is saved.",
+    false
+  );
+}
+
+function applyInvoiceDocumentFile(file) {
+  if (!file.type || !file.type.startsWith("image/")) {
+    throw new Error("Please upload an image file only.");
   }
-      async function saveInvoice() {
-    const customer = getSelectedCustomer();
-    if (!customer) return;
 
-    const invoiceNumber = el.invoiceNumber.value.trim();
-    const invoiceDate = el.invoiceDate.value;
-    const poNumber = el.poNumber.value.trim();
-    const referenceInfo = el.referenceInfo.value.trim();
-    const invoiceDocumentNotes = document.getElementById("invoiceDocumentNotes")?.value.trim() || null;
-
-    if (!invoiceNumber) return alert("Invoice number is required.");
-    if (!invoiceDate) return alert("Invoice date is required.");
-
-    const invoiceNumberKey = normalizeInvoiceNumberForKey(invoiceNumber);
-    if (!invoiceNumberKey) {
-      return alert("Invoice number is invalid.");
-    }
-
-    const duplicateInvoice = findDuplicateInvoiceByNumber(invoiceNumber, state.editingInvoiceId);
-    if (duplicateInvoice) {
-      const duplicateCustomer = state.customers.find((c) => c.id === duplicateInvoice.customer_id);
-      const duplicateStatus = duplicateInvoice.is_voided
-        ? "Voided"
-        : (duplicateInvoice.status || duplicateInvoice.primary_status || "Existing");
-
-      return alert(
-        `Invoice number "${invoiceNumber}" already exists.\n\n` +
-        `Existing record:\n` +
-        `Customer: ${duplicateCustomer?.name || "-"}\n` +
-        `Invoice #: ${duplicateInvoice.invoice_number || "-"}\n` +
-        `Date: ${duplicateInvoice.invoice_date || "-"}\n` +
-        `Status: ${duplicateStatus}\n\n` +
-        `Duplicate invoice numbers are not allowed, including voided invoices. Please use a new unique invoice number.`
-      );
-    }
-
-    const editorState = getInvoiceEditorState();
-
-    if (!editorState.items.length) {
-      return alert("Add at least one line item.");
-    }
-
-    if (editorState.exceedsCap) {
-      return alert(
-        `Discount exceeds this customer's authorized cap.\n\n` +
-        `Cap: ${formatPeso(editorState.capAmount)}\n` +
-        `Applied Discount: ${formatPeso(editorState.discountTotalAmount)}`
-      );
-    }
-
-    const items = editorState.items.map((item) => ({
-      product_name: item.product_name,
-      qty: item.qty,
-      unit_price: item.unit_price,
-      line_subtotal: item.line_subtotal,
-      discount_per_qty: item.discount_per_qty,
-      line_discount_total: item.line_discount_total,
-      line_total: item.line_total
-    }));
-
-    const total = editorState.totalAmount;
-    let savedInvoiceId = state.editingInvoiceId || null;
-    let documentMessage = "";
-
-    if (state.editingInvoiceId) {
-      if (!canEditInvoice()) return;
-
-      const editNote = el.editRequiredNote.value.trim();
-      if (editNoteRequired() && !editNote) return alert("Edit note is required for admin edits.");
-
+  if (file.size > 6 * 1024 * 1024) {
+    throw new Error("Please keep the image under 6MB.");
   }
+
+  if (invoiceDocumentState.previewUrl) {
+    URL.revokeObjectURL(invoiceDocumentState.previewUrl);
+  }
+
+  invoiceDocumentState.file = file;
+  invoiceDocumentState.source = "upload";
+  invoiceDocumentState.previewUrl = URL.createObjectURL(file);
+
+  const previewWrap = document.getElementById("invoiceDocumentPreviewWrap");
+  const previewImg = document.getElementById("invoiceDocumentPreviewImg");
+
+  if (previewWrap && previewImg) {
+    previewImg.src = invoiceDocumentState.previewUrl;
+    previewWrap.classList.remove("hidden");
+  }
+
+  setInvoiceDocumentStatus(
+    "Image ready. When you click Save Invoice, this image will also be saved into Document Vault.",
+    false
+  );
+}
+
+function clearInvoiceDocumentDraft(resetStatus = false) {
+  const fileInput = document.getElementById("invoiceDocumentFileInput");
+  const notesInput = document.getElementById("invoiceDocumentNotes");
+  const previewWrap = document.getElementById("invoiceDocumentPreviewWrap");
+  const previewImg = document.getElementById("invoiceDocumentPreviewImg");
+
+  if (invoiceDocumentState.previewUrl) {
+    URL.revokeObjectURL(invoiceDocumentState.previewUrl);
+  }
+
+  invoiceDocumentState.file = null;
+  invoiceDocumentState.previewUrl = "";
+  invoiceDocumentState.source = "upload";
+
+  if (fileInput) fileInput.value = "";
+  if (notesInput) notesInput.value = "";
+  if (previewImg) previewImg.src = "";
+  if (previewWrap) previewWrap.classList.add("hidden");
+
+  if (resetStatus) {
+    setInvoiceDocumentStatus(
+      "Optional. Upload an image. It will be saved to Document Vault using the invoice number after the invoice is saved.",
+      false
+    );
+  }
+}
+
+function setInvoiceDocumentStatus(message, isError) {
+  const statusBox = document.getElementById("invoiceDocumentStatus");
+  if (!statusBox) return;
+
+  statusBox.textContent = message;
+  statusBox.classList.toggle("doc-status-error", !!isError);
+  statusBox.classList.toggle("doc-status-success", !isError);
+}
+
+function invoiceDocumentSafeFileName(fileName) {
+  const cleaned = String(fileName || "invoice-document.png")
+    .trim()
+    .replace(/\s+/g, "-")
+    .replace(/[^a-zA-Z0-9._-]/g, "");
+
+  return cleaned || `invoice-document-${Date.now()}.png`;
+}
+
+async function saveInvoiceDocumentToVault({ customerId, invoiceId, invoiceNumber, notes }) {
+  if (!invoiceDocumentState.file) return false;
+
+  const { data: authData, error: authError } = await supabaseClient.auth.getUser();
+  if (authError || !authData?.user?.id) {
+    throw new Error("Could not identify the signed-in user for the invoice document.");
+  }
+
+  const invoiceNumberKey = normalizeInvoiceNumberForKey(invoiceNumber) || `invoice-${Date.now()}`;
+  const safeOriginalName = invoiceDocumentSafeFileName(invoiceDocumentState.file.name);
+  const storagePath = `${customerId}/${new Date().toISOString().slice(0, 10)}/invoice-${invoiceNumberKey}-${Date.now()}-${safeOriginalName}`;
+
+  const { error: uploadError } = await supabaseClient.storage
+    .from("customer-documents")
+    .upload(storagePath, invoiceDocumentState.file, {
+      cacheControl: "3600",
+      upsert: false,
+      contentType: invoiceDocumentState.file.type || "image/png"
+    });
+
+  if (uploadError) {
+    throw new Error(uploadError.message || "Invoice document upload failed.");
+  }
+
+  const { error: insertError } = await supabaseClient
+    .from("customer_documents")
+    .insert({
+      customer_id: customerId,
+      invoice_id: invoiceId,
+      payment_id: null,
+      origin_screen: "invoice_modal",
+      category: "invoice",
+      title: invoiceNumber,
+      reference_code: invoiceNumber,
+      notes: notes || null,
+      file_name: invoiceDocumentState.file.name,
+      mime_type: invoiceDocumentState.file.type || "image/png",
+      file_size: invoiceDocumentState.file.size,
+      storage_path: storagePath,
+      source: invoiceDocumentState.source,
+      uploaded_by: authData.user.id
+    });
+
+  if (insertError) {
+    await supabaseClient.storage.from("customer-documents").remove([storagePath]);
+    throw new Error(insertError.message || "Invoice document record could not be saved.");
+  }
+
+  clearInvoiceDocumentDraft(true);
+  return true;
+}
+
+initInvoiceDocumentFlow();
+
+async function saveInvoice() {
+  const customer = getSelectedCustomer();
+  if (!customer) return;
+
+  const invoiceNumber = el.invoiceNumber.value.trim();
+  const invoiceDate = el.invoiceDate.value;
+  const poNumber = el.poNumber.value.trim();
+  const referenceInfo = el.referenceInfo.value.trim();
+  const invoiceDocumentNotes = document.getElementById("invoiceDocumentNotes")?.value.trim() || null;
+
+  if (!invoiceNumber) return alert("Invoice number is required.");
+  if (!invoiceDate) return alert("Invoice date is required.");
+
+  const invoiceNumberKey = normalizeInvoiceNumberForKey(invoiceNumber);
+  if (!invoiceNumberKey) {
+    return alert("Invoice number is invalid.");
+  }
+
+  const duplicateInvoice = findDuplicateInvoiceByNumber(invoiceNumber, state.editingInvoiceId);
+  if (duplicateInvoice) {
+    const duplicateCustomer = state.customers.find((c) => c.id === duplicateInvoice.customer_id);
+    const duplicateStatus = duplicateInvoice.is_voided
+      ? "Voided"
+      : (duplicateInvoice.status || duplicateInvoice.primary_status || "Existing");
+
+    return alert(
+      `Invoice number "${invoiceNumber}" already exists.\n\n` +
+      `Existing record:\n` +
+      `Customer: ${duplicateCustomer?.name || "-"}\n` +
+      `Invoice #: ${duplicateInvoice.invoice_number || "-"}\n` +
+      `Date: ${duplicateInvoice.invoice_date || "-"}\n` +
+      `Status: ${duplicateStatus}\n\n` +
+      `Duplicate invoice numbers are not allowed, including voided invoices. Please use a new unique invoice number.`
+    );
+  }
+
+  const editorState = getInvoiceEditorState();
+
+  if (!editorState.items.length) {
+    return alert("Add at least one line item.");
+  }
+
+  if (editorState.exceedsCap) {
+    return alert(
+      `Discount exceeds this customer's authorized cap.\n\n` +
+      `Cap: ${formatPeso(editorState.capAmount)}\n` +
+      `Applied Discount: ${formatPeso(editorState.discountTotalAmount)}`
+    );
+  }
+
+  const items = editorState.items.map((item) => ({
+    product_name: item.product_name,
+    qty: item.qty,
+    unit_price: item.unit_price,
+    line_subtotal: item.line_subtotal,
+    discount_per_qty: item.discount_per_qty,
+    line_discount_total: item.line_discount_total,
+    line_total: item.line_total
+  }));
+
+  const total = editorState.totalAmount;
+  let savedInvoiceId = state.editingInvoiceId || null;
+  let documentMessage = "";
+
+  if (state.editingInvoiceId) {
+    if (!canEditInvoice()) return;
+
+    const editNote = el.editRequiredNote.value.trim();
+    if (editNoteRequired() && !editNote) return alert("Edit note is required for admin edits.");
+
+    const oldInvoice = state.invoices.find((x) => x.id === state.editingInvoiceId);
+    if (!oldInvoice) return alert("Invoice not found.");
+
+    if (!canEditInvoiceRecord(oldInvoice)) {
+      return alert("Admin cannot edit partially paid or paid invoices.");
+    }
+
+    const paidAmount = Number(oldInvoice.paidAmount || 0);
+    const balanceAmount = round2(Math.max(0, total - paidAmount));
+    const primaryStatus = balanceAmount <= 0 ? "PAID" : balanceAmount < total ? "PARTIALLY_PAID" : "UNPAID";
+
+    const { error } = await supabaseClient
+      .from("invoices")
+      .update({
+        invoice_number: invoiceNumber,
+        invoice_number_key: invoiceNumberKey,
+        invoice_date: invoiceDate,
+        po_number: poNumber || null,
+        reference_info: referenceInfo || null,
+        subtotal_amount: editorState.subtotalAmount,
+        line_discount_total: editorState.lineDiscountTotal,
+        invoice_discount_amount: editorState.invoiceDiscountAmount,
+        discount_total_amount: editorState.discountTotalAmount,
+        discount_mode: editorState.discountEnabled ? editorState.discountMode : "none",
+        discount_reason: editorState.discountEnabled ? (editorState.discountReason || null) : null,
+        total_amount: total,
+        balance_amount: balanceAmount,
+        primary_status: primaryStatus,
+        updated_at: new Date().toISOString()
+      })
+      .eq("id", state.editingInvoiceId);
+
+    if (error) return alert(error.message);
+
+    const { error: deleteItemsError } = await supabaseClient
+      .from("invoice_items")
+      .delete()
+      .eq("invoice_id", state.editingInvoiceId);
+
+    if (deleteItemsError) return alert(deleteItemsError.message);
+
+    const { error: itemError } = await supabaseClient
+      .from("invoice_items")
+      .insert(items.map((i) => ({ ...i, invoice_id: state.editingInvoiceId })));
+
+    if (itemError) return alert(itemError.message);
+
+    await addLog("Edit", "Invoice", invoiceNumber, editNote, oldInvoice, {
+      invoice_number: invoiceNumber,
+      invoice_date: invoiceDate,
+      po_number: poNumber,
+      reference_info: referenceInfo,
+      subtotal_amount: editorState.subtotalAmount,
+      line_discount_total: editorState.lineDiscountTotal,
+      invoice_discount_amount: editorState.invoiceDiscountAmount,
+      discount_total_amount: editorState.discountTotalAmount,
+      discount_mode: editorState.discountEnabled ? editorState.discountMode : "none",
+      discount_reason: editorState.discountEnabled ? (editorState.discountReason || null) : null,
+      total_amount: total
+    });
+
+    savedInvoiceId = state.editingInvoiceId;
+  } else {
+    if (!canCreateInvoice()) return;
+
+    const { data, error } = await supabaseClient
+      .from("invoices")
+      .insert([{
+        customer_id: customer.id,
+        invoice_number: invoiceNumber,
+        invoice_number_key: invoiceNumberKey,
+        invoice_date: invoiceDate,
+        po_number: poNumber || null,
+        reference_info: referenceInfo || null,
+        subtotal_amount: editorState.subtotalAmount,
+        line_discount_total: editorState.lineDiscountTotal,
+        invoice_discount_amount: editorState.invoiceDiscountAmount,
+        discount_total_amount: editorState.discountTotalAmount,
+        discount_mode: editorState.discountEnabled ? editorState.discountMode : "none",
+        discount_reason: editorState.discountEnabled ? (editorState.discountReason || null) : null,
+        total_amount: total,
+        paid_amount: 0,
+        balance_amount: total,
+        primary_status: "UNPAID",
+        payment_notice_status: "NONE",
+        created_by: state.currentProfile.id,
+        is_voided: false
+      }])
+      .select()
+      .single();
+
+    if (error) return alert(error.message);
+
+    const { error: itemError } = await supabaseClient
+      .from("invoice_items")
+      .insert(items.map((i) => ({ ...i, invoice_id: data.id })));
+
+    if (itemError) return alert(itemError.message);
+
+    await addLog("Create", "Invoice", invoiceNumber, "", null, data);
+    savedInvoiceId = data.id;
+  }
+
+  if (invoiceDocumentState.file && savedInvoiceId) {
+    try {
+      const docSaved = await saveInvoiceDocumentToVault({
+        customerId: customer.id,
+        invoiceId: savedInvoiceId,
+        invoiceNumber,
+        notes: invoiceDocumentNotes
+      });
+
+      if (docSaved) {
+        documentMessage = "\nInvoice document was also saved to Document Vault.";
+      }
+    } catch (error) {
+      documentMessage =
+        `\nInvoice was saved, but the document was not saved to Document Vault.\nReason: ${error.message || "Unknown error"}`;
+    }
+  }
+
+  closeModal(el.invoiceModal);
+  state.editingInvoiceId = null;
+  await refreshSelectedCustomerOnly();
+
+  if (typeof window.AKY_loadCustomerDocuments === "function") {
+    await window.AKY_loadCustomerDocuments();
+  }
+
+  alert(`Invoice saved successfully.${documentMessage}`);
+}
 
   function viewInvoice(invoiceId) {
     const customer = getSelectedCustomer();
