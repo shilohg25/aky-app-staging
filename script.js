@@ -4434,43 +4434,107 @@ function formatCompactPeso(value) {
     setInterval(syncDocumentVaultCustomer, 1200);
     syncDocumentVaultCustomer();
   }
+function ensureDocVaultStandaloneButton() {
+  const hint = document.getElementById("docVaultCustomerHint");
+  if (!hint) return null;
 
+  let row = document.getElementById("docVaultStandaloneRow");
+  if (!row) {
+    row = document.createElement("div");
+    row.id = "docVaultStandaloneRow";
+    row.className = "btn-row";
+    row.style.margin = "8px 0 12px";
+    row.innerHTML = `
+      <button type="button" class="btn btn-light" id="docVaultStandaloneBtn">
+        Add Other Document
+      </button>
+    `;
+    hint.insertAdjacentElement("afterend", row);
+  }
+
+  return row.querySelector("#docVaultStandaloneBtn");
+}
   function syncDocumentVaultCustomer() {
-    if (typeof getSelectedCustomer !== "function") return;
+  if (typeof getSelectedCustomer !== "function") return;
 
-    const customer = getSelectedCustomer();
-    const customerId = customer?.id || null;
-    const role = state.currentProfile?.role || "";
+  const customer = getSelectedCustomer();
+  const customerId = customer?.id || null;
+  const role = state.currentProfile?.role || "";
 
-    const uploader = document.getElementById("docVaultUploader");
-    const hint = document.getElementById("docVaultCustomerHint");
-    const tableBody = document.getElementById("customerDocumentsTableBody");
+  const uploader = document.getElementById("docVaultUploader");
+  const hint = document.getElementById("docVaultCustomerHint");
+  const tableBody = document.getElementById("customerDocumentsTableBody");
+  const standaloneBtn = ensureDocVaultStandaloneButton();
 
-    if (!uploader || !hint || !tableBody) return;
+  if (!uploader || !hint || !tableBody) return;
 
-    uploader.classList.toggle("hidden", !customerId || role === "co-owner");
+  if (typeof documentVaultState.standaloneOpen !== "boolean") {
+    documentVaultState.standaloneOpen = false;
+  }
 
-    if (!customerId) {
-      hint.textContent = "Select a customer to view or save supporting documents.";
-      tableBody.innerHTML = `<tr><td colspan="7" class="muted">Select a customer first.</td></tr>`;
+  const canUploadStandalone = !!customerId && role !== "co-owner";
 
-      if (documentVaultState.currentCustomerId !== null) {
-        documentVaultState.currentCustomerId = null;
-        documentVaultState.documents = [];
+  if (standaloneBtn) {
+    const wrap = standaloneBtn.parentElement;
+    if (wrap) {
+      wrap.classList.toggle("hidden", !canUploadStandalone);
+    }
+
+    standaloneBtn.textContent = documentVaultState.standaloneOpen
+      ? "Close Other Document"
+      : "Add Other Document";
+
+    standaloneBtn.onclick = () => {
+      documentVaultState.standaloneOpen = !documentVaultState.standaloneOpen;
+
+      uploader.classList.toggle(
+        "hidden",
+        !canUploadStandalone || !documentVaultState.standaloneOpen
+      );
+
+      standaloneBtn.textContent = documentVaultState.standaloneOpen
+        ? "Close Other Document"
+        : "Add Other Document";
+
+      if (documentVaultState.standaloneOpen) {
+        setDocumentVaultStatus(
+          "Use this only for rare standalone customer documents.",
+          false
+        );
+      } else {
         clearDocumentVaultDraft(false);
       }
-
-      return;
-    }
-
-    hint.textContent = `Saved documents for ${customer.name || "selected customer"}.`;
-
-    if (documentVaultState.currentCustomerId !== customerId) {
-      documentVaultState.currentCustomerId = customerId;
-      clearDocumentVaultDraft(false);
-      loadCustomerDocuments();
-    }
+    };
   }
+
+  uploader.classList.toggle(
+    "hidden",
+    !canUploadStandalone || !documentVaultState.standaloneOpen
+  );
+
+  if (!customerId) {
+    hint.textContent = "Select a customer to view saved supporting documents.";
+    tableBody.innerHTML = `<tr><td colspan="7" class="muted">Select a customer first.</td></tr>`;
+
+    if (documentVaultState.currentCustomerId !== null) {
+      documentVaultState.currentCustomerId = null;
+      documentVaultState.documents = [];
+      documentVaultState.standaloneOpen = false;
+      clearDocumentVaultDraft(false);
+    }
+
+    return;
+  }
+
+  hint.textContent = `Saved documents for ${customer.name || "selected customer"}. Invoice and payment uploads appear here automatically.`;
+
+  if (documentVaultState.currentCustomerId !== customerId) {
+    documentVaultState.currentCustomerId = customerId;
+    documentVaultState.standaloneOpen = false;
+    clearDocumentVaultDraft(false);
+    loadCustomerDocuments();
+  }
+}
 
   function applyDocumentVaultFile(file, source) {
     if (!file.type.startsWith("image/")) {
