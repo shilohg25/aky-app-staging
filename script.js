@@ -4399,7 +4399,6 @@ function formatCompactPeso(value) {
     }
   });
 
-  setInterval(syncDocumentVaultCustomer, 1200);
   syncDocumentVaultCustomer();
 }
 function ensureDocVaultStandaloneButton() {
@@ -4568,7 +4567,7 @@ function closeDocVaultPopup() {
     standaloneBtn.onclick = () => openDocVaultPopup();
   }
 
-  uploader.classList.add("hidden");
+  uploader.classList.toggle("hidden", !documentVaultState.standaloneOpen);
 
   if (!customerId) {
     hint.textContent = "Select a customer to view saved supporting documents.";
