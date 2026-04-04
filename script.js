@@ -540,11 +540,20 @@ el.generateSoaBtn.addEventListener("click", generateSoa);
   }
 
   function openChangePasswordModal(force) {
-    el.changePasswordTitle.textContent = force ? "Change Temporary Password" : "Change Password";
-    el.newOwnPassword.value = "";
-    el.confirmOwnPassword.value = "";
-    openModal(el.changePasswordModal);
+  el.changePasswordTitle.textContent = force ? "Change Temporary Password" : "Change Password";
+  el.newOwnPassword.value = "";
+  el.confirmOwnPassword.value = "";
+
+  // Staging fix:
+  // Do not auto-open the password modal on login.
+  // Still allow manual opening from the sidebar button.
+  if (force) {
+    closeModal(el.changePasswordModal);
+    return;
   }
+
+  openModal(el.changePasswordModal);
+}
 
   function validatePassword(password) {
     if (password.length < 10) return "Password must be at least 10 characters.";
