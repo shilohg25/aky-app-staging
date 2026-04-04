@@ -659,6 +659,43 @@
     Nothing uploaded yet.
   </div>
 </div>
+      <div class="panel soft-panel">
+  <div class="panel-row">
+    <h4 class="panel-title small-title">Invoice Document</h4>
+    <label class="doc-upload-btn">
+      <input id="invoiceDocumentFileInput" type="file" accept="image/*" hidden />
+      Choose image
+    </label>
+  </div>
+
+  <div class="form-grid one-col" style="margin-top:12px;">
+    <div class="field">
+      <label for="invoiceDocumentTitle">Title</label>
+      <input id="invoiceDocumentTitle" type="text" placeholder="Optional title for the vault" />
+    </div>
+
+    <div class="field">
+      <label for="invoiceDocumentNotes">Notes</label>
+      <textarea id="invoiceDocumentNotes" rows="3" placeholder="Optional note for future investigation"></textarea>
+    </div>
+  </div>
+
+  <div id="invoiceDocumentPasteZone" class="doc-paste-zone" tabindex="0">
+    Click here, then press Ctrl + V to paste an invoice screenshot or snippet.
+  </div>
+
+  <div id="invoiceDocumentPreviewWrap" class="doc-preview-wrap hidden">
+    <img id="invoiceDocumentPreviewImg" class="doc-preview-img" alt="Invoice document preview" />
+  </div>
+
+  <div class="btn-row" style="margin-top:12px;">
+    <button id="clearInvoiceDocumentBtn" class="btn btn-light" type="button">Clear Document</button>
+  </div>
+
+  <div id="invoiceDocumentStatus" class="info-box" style="margin-top:12px;">
+    Optional. This image will be saved to Document Vault after the invoice is saved.
+  </div>
+</div>
 <div id="invoiceDiscountWrap" class="panel soft-panel hidden">
   <div class="panel-row">
     <h4 class="panel-title small-title">Invoice Discount</h4>
