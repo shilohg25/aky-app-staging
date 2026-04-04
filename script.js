@@ -4134,3 +4134,481 @@ function formatCompactPeso(value) {
   }
   // ===== End AI Document Assist =====
 })();
+  // ===== Document Vault =====
+  const documentVaultState = {
+    file: null,
+    source: "upload",
+    previewUrl: "",
+    currentCustomerId: null,
+    documents: []
+  };
+
+  initDocumentVault();
+
+  function initDocumentVault() {
+    const fileInput = document.getElementById("customerDocumentFileInput");
+    const pasteZone = document.getElementById("customerDocumentPasteZone");
+    const saveBtn = document.getElementById("saveCustomerDocumentBtn");
+    const clearBtn = document.getElementById("clearCustomerDocumentBtn");
+    const docsTableBody = document.getElementById("customerDocumentsTableBody");
+
+    if (!fileInput || !pasteZone || !saveBtn || !clearBtn || !docsTableBody) {
+      return;
+    }
+
+    fileInput.addEventListener("change", async (event) => {
+      const file = event.target.files?.[0];
+      if (!file) return;
+
+      try {
+        applyDocumentVaultFile(file, "upload");
+      } catch (error) {
+        setDocumentVaultStatus(error.message || "Could not read file.", true);
+        fileInput.value = "";
+      }
+    });
+
+    pasteZone.addEventListener("click", () => pasteZone.focus());
+
+    pasteZone.addEventListener("paste", async (event) => {
+      const items = [...(event.clipboardData?.items || [])];
+      const imageItem = items.find((item) => item.type.startsWith("image/"));
+
+      if (!imageItem) {
+        setDocumentVaultStatus("No image found in clipboard. Copy a snippet first, then press Ctrl + V here.", true);
+        return;
+      }
+
+      event.preventDefault();
+
+      const blob = imageItem.getAsFile();
+      if (!blob) {
+        setDocumentVaultStatus("Clipboard image could not be read. Try copying it again.", true);
+        return;
+      }
+
+      try {
+        const extension = docVaultExtFromMime(blob.type || "image/png");
+        const pastedFile = new File(
+          [blob],
+          `pasted-document-${Date.now()}.${extension}`,
+          { type: blob.type || "image/png" }
+        );
+
+        applyDocumentVaultFile(pastedFile, "paste");
+      } catch (error) {
+        setDocumentVaultStatus(error.message || "Could not use pasted image.", true);
+      }
+    });
+
+    saveBtn.addEventListener("click", saveCustomerDocument);
+    clearBtn.addEventListener("click", () => clearDocumentVaultDraft(true));
+
+    docsTableBody.addEventListener("click", async (event) => {
+      const button = event.target.closest("[data-doc-action]");
+      if (!button) return;
+
+      const action = button.getAttribute("data-doc-action");
+      const docId = button.getAttribute("data-doc-id");
+      if (!action || !docId) return;
+
+      if (action === "view") {
+        await openCustomerDocument(docId);
+      }
+
+      if (action === "delete") {
+        await deleteCustomerDocument(docId);
+      }
+    });
+
+    setInterval(syncDocumentVaultCustomer, 1200);
+    syncDocumentVaultCustomer();
+  }
+
+  function syncDocumentVaultCustomer() {
+    if (typeof getSelectedCustomer !== "function") return;
+
+    const customer = getSelectedCustomer();
+    const customerId = customer?.id || null;
+    const role = state.currentProfile?.role || "";
+
+    const uploader = document.getElementById("docVaultUploader");
+    const hint = document.getElementById("docVaultCustomerHint");
+    const tableBody = document.getElementById("customerDocumentsTableBody");
+
+    if (!uploader || !hint || !tableBody) return;
+
+    uploader.classList.toggle("hidden", !customerId || role === "co-owner");
+
+    if (!customerId) {
+      hint.textContent = "Select a customer to view or save supporting documents.";
+      tableBody.innerHTML = `<tr><td colspan="7" class="muted">Select a customer first.</td></tr>`;
+
+      if (documentVaultState.currentCustomerId !== null) {
+        documentVaultState.currentCustomerId = null;
+        documentVaultState.documents = [];
+        clearDocumentVaultDraft(false);
+      }
+
+      return;
+    }
+
+    hint.textContent = `Saved documents for ${customer.name || "selected customer"}.`;
+
+    if (documentVaultState.currentCustomerId !== customerId) {
+      documentVaultState.currentCustomerId = customerId;
+      clearDocumentVaultDraft(false);
+      loadCustomerDocuments();
+    }
+  }
+
+  function applyDocumentVaultFile(file, source) {
+    if (!file.type.startsWith("image/")) {
+      throw new Error("Please use an image file only.");
+    }
+
+    if (file.size > 6 * 1024 * 1024) {
+      throw new Error("Please keep the image under 6MB.");
+    }
+
+    if (documentVaultState.previewUrl) {
+      URL.revokeObjectURL(documentVaultState.previewUrl);
+    }
+
+    documentVaultState.file = file;
+    documentVaultState.source = source || "upload";
+    documentVaultState.previewUrl = URL.createObjectURL(file);
+
+    const previewWrap = document.getElementById("customerDocumentPreviewWrap");
+    const previewImg = document.getElementById("customerDocumentPreviewImg");
+    const titleInput = document.getElementById("customerDocumentTitle");
+
+    if (previewWrap && previewImg) {
+      previewImg.src = documentVaultState.previewUrl;
+      previewWrap.classList.remove("hidden");
+    }
+
+    if (titleInput && !titleInput.value.trim()) {
+      titleInput.value = docVaultTitleFromFile(file.name);
+    }
+
+    setDocumentVaultStatus("Image ready. Review details, then click Save Document.", false);
+  }
+
+  function clearDocumentVaultDraft(resetStatus) {
+    const fileInput = document.getElementById("customerDocumentFileInput");
+    const previewWrap = document.getElementById("customerDocumentPreviewWrap");
+    const previewImg = document.getElementById("customerDocumentPreviewImg");
+    const titleInput = document.getElementById("customerDocumentTitle");
+    const referenceInput = document.getElementById("customerDocumentReference");
+    const notesInput = document.getElementById("customerDocumentNotes");
+    const categoryInput = document.getElementById("customerDocumentCategory");
+
+    if (documentVaultState.previewUrl) {
+      URL.revokeObjectURL(documentVaultState.previewUrl);
+    }
+
+    documentVaultState.file = null;
+    documentVaultState.source = "upload";
+    documentVaultState.previewUrl = "";
+
+    if (fileInput) fileInput.value = "";
+    if (previewImg) previewImg.src = "";
+    if (previewWrap) previewWrap.classList.add("hidden");
+    if (titleInput) titleInput.value = "";
+    if (referenceInput) referenceInput.value = "";
+    if (notesInput) notesInput.value = "";
+    if (categoryInput) categoryInput.value = "invoice";
+
+    if (resetStatus) {
+      setDocumentVaultStatus("Choose an image or paste a screenshot. Max 6MB.", false);
+    }
+  }
+
+  function setDocumentVaultStatus(message, isError) {
+    const statusBox = document.getElementById("customerDocumentStatus");
+    if (!statusBox) return;
+
+    statusBox.innerHTML = message;
+    statusBox.classList.toggle("doc-status-error", !!isError);
+    statusBox.classList.toggle("doc-status-success", !isError);
+  }
+
+  async function saveCustomerDocument() {
+    const role = state.currentProfile?.role || "";
+    if (role === "co-owner") {
+      alert("Co-owner can view documents but cannot upload.");
+      return;
+    }
+
+    const customer = typeof getSelectedCustomer === "function" ? getSelectedCustomer() : null;
+    if (!customer?.id) {
+      alert("Please select a customer first.");
+      return;
+    }
+
+    if (!documentVaultState.file) {
+      alert("Choose or paste an image first.");
+      return;
+    }
+
+    const categoryInput = document.getElementById("customerDocumentCategory");
+    const titleInput = document.getElementById("customerDocumentTitle");
+    const referenceInput = document.getElementById("customerDocumentReference");
+    const notesInput = document.getElementById("customerDocumentNotes");
+    const saveBtn = document.getElementById("saveCustomerDocumentBtn");
+    const clearBtn = document.getElementById("clearCustomerDocumentBtn");
+
+    const category = categoryInput?.value || "invoice";
+    const title = titleInput?.value?.trim() || docVaultTitleFromFile(documentVaultState.file.name);
+    const referenceCode = referenceInput?.value?.trim() || null;
+    const notes = notesInput?.value?.trim() || null;
+
+    try {
+      if (saveBtn) {
+        saveBtn.disabled = true;
+        saveBtn.textContent = "Saving...";
+      }
+      if (clearBtn) clearBtn.disabled = true;
+
+      const { data: authData, error: authError } = await supabaseClient.auth.getUser();
+      if (authError || !authData?.user?.id) {
+        throw new Error("Could not identify the signed-in user.");
+      }
+
+      const safeFileName = docVaultSafeFileName(documentVaultState.file.name);
+      const storagePath = `${customer.id}/${new Date().toISOString().slice(0, 10)}/${crypto.randomUUID()}-${safeFileName}`;
+
+      const { error: uploadError } = await supabaseClient.storage
+        .from("customer-documents")
+        .upload(storagePath, documentVaultState.file, {
+          cacheControl: "3600",
+          upsert: false,
+          contentType: documentVaultState.file.type || "image/png"
+        });
+
+      if (uploadError) {
+        throw new Error(uploadError.message || "Storage upload failed.");
+      }
+
+      const { error: insertError } = await supabaseClient
+        .from("customer_documents")
+        .insert({
+          customer_id: customer.id,
+          category,
+          title,
+          reference_code: referenceCode,
+          notes,
+          file_name: documentVaultState.file.name,
+          mime_type: documentVaultState.file.type || "image/png",
+          file_size: documentVaultState.file.size,
+          storage_path: storagePath,
+          source: documentVaultState.source,
+          uploaded_by: authData.user.id
+        });
+
+      if (insertError) {
+        await supabaseClient.storage.from("customer-documents").remove([storagePath]);
+        throw new Error(insertError.message || "Database save failed.");
+      }
+
+      clearDocumentVaultDraft(true);
+      await loadCustomerDocuments();
+      setDocumentVaultStatus("Document saved successfully.", false);
+    } catch (error) {
+      setDocumentVaultStatus(docVaultEscapeHtml(error.message || "Could not save document."), true);
+    } finally {
+      if (saveBtn) {
+        saveBtn.disabled = false;
+        saveBtn.textContent = "Save Document";
+      }
+      if (clearBtn) clearBtn.disabled = false;
+    }
+  }
+
+  async function loadCustomerDocuments() {
+    const customer = typeof getSelectedCustomer === "function" ? getSelectedCustomer() : null;
+    const tableBody = document.getElementById("customerDocumentsTableBody");
+    if (!tableBody) return;
+
+    if (!customer?.id) {
+      tableBody.innerHTML = `<tr><td colspan="7" class="muted">Select a customer first.</td></tr>`;
+      return;
+    }
+
+    tableBody.innerHTML = `<tr><td colspan="7" class="muted">Loading documents...</td></tr>`;
+
+    const { data, error } = await supabaseClient
+      .from("customer_documents")
+      .select("*")
+      .eq("customer_id", customer.id)
+      .order("uploaded_at", { ascending: false });
+
+    if (error) {
+      tableBody.innerHTML = `<tr><td colspan="7" class="muted">Could not load documents.</td></tr>`;
+      return;
+    }
+
+    documentVaultState.documents = Array.isArray(data) ? data : [];
+    renderCustomerDocumentsTable();
+  }
+
+  function renderCustomerDocumentsTable() {
+    const tableBody = document.getElementById("customerDocumentsTableBody");
+    if (!tableBody) return;
+
+    const role = state.currentProfile?.role || "";
+    const canDelete = role === "owner" || role === "admin";
+    const docs = documentVaultState.documents || [];
+
+    if (!docs.length) {
+      tableBody.innerHTML = `<tr><td colspan="7" class="muted">No saved documents for this customer yet.</td></tr>`;
+      return;
+    }
+
+    tableBody.innerHTML = docs.map((doc) => {
+      const uploadedAt = doc.uploaded_at ? docVaultFormatDateTime(doc.uploaded_at) : "-";
+      const title = doc.title || doc.file_name || "-";
+      const reference = doc.reference_code || "-";
+      const source = doc.source === "paste" ? "Paste" : "Upload";
+      const size = docVaultFormatBytes(doc.file_size || 0);
+
+      return `
+        <tr>
+          <td>${docVaultEscapeHtml(uploadedAt)}</td>
+          <td>${docVaultEscapeHtml(docVaultPrettyCategory(doc.category))}</td>
+          <td>${docVaultEscapeHtml(title)}</td>
+          <td>${docVaultEscapeHtml(reference)}</td>
+          <td>${docVaultEscapeHtml(source)}</td>
+          <td>${docVaultEscapeHtml(size)}</td>
+          <td>
+            <div class="doc-action-row">
+              <button class="btn btn-light small-btn" type="button" data-doc-action="view" data-doc-id="${doc.id}">View</button>
+              ${canDelete ? `<button class="btn btn-danger small-btn" type="button" data-doc-action="delete" data-doc-id="${doc.id}">Delete</button>` : ""}
+            </div>
+          </td>
+        </tr>
+      `;
+    }).join("");
+  }
+
+  async function openCustomerDocument(docId) {
+    const doc = documentVaultState.documents.find((item) => item.id === docId);
+    if (!doc) return;
+
+    try {
+      const { data, error } = await supabaseClient.storage
+        .from("customer-documents")
+        .download(doc.storage_path);
+
+      if (error || !data) {
+        throw new Error(error?.message || "Could not open document.");
+      }
+
+      const blobUrl = URL.createObjectURL(data);
+      window.open(blobUrl, "_blank", "noopener,noreferrer");
+      setTimeout(() => URL.revokeObjectURL(blobUrl), 60000);
+    } catch (error) {
+      alert(error.message || "Could not open document.");
+    }
+  }
+
+  async function deleteCustomerDocument(docId) {
+    const role = state.currentProfile?.role || "";
+    if (role !== "owner" && role !== "admin") {
+      alert("Only owner and admin can delete documents.");
+      return;
+    }
+
+    const doc = documentVaultState.documents.find((item) => item.id === docId);
+    if (!doc) return;
+
+    const confirmed = confirm(`Delete this document?\n\n${doc.title || doc.file_name || "Untitled document"}`);
+    if (!confirmed) return;
+
+    try {
+      const { error: rowDeleteError } = await supabaseClient
+        .from("customer_documents")
+        .delete()
+        .eq("id", doc.id);
+
+      if (rowDeleteError) {
+        throw new Error(rowDeleteError.message || "Could not delete document record.");
+      }
+
+      const { error: storageDeleteError } = await supabaseClient.storage
+        .from("customer-documents")
+        .remove([doc.storage_path]);
+
+      await loadCustomerDocuments();
+
+      if (storageDeleteError) {
+        setDocumentVaultStatus("Document record deleted, but file cleanup in storage failed.", true);
+        return;
+      }
+
+      setDocumentVaultStatus("Document deleted successfully.", false);
+    } catch (error) {
+      setDocumentVaultStatus(docVaultEscapeHtml(error.message || "Could not delete document."), true);
+    }
+  }
+
+  function docVaultPrettyCategory(value) {
+    if (value === "invoice") return "Invoice";
+    if (value === "payment_proof") return "Payment Proof";
+    if (value === "cheque") return "Cheque";
+    return "Other";
+  }
+
+  function docVaultTitleFromFile(fileName) {
+    return String(fileName || "Document")
+      .replace(/\.[^.]+$/, "")
+      .replace(/[-_]+/g, " ")
+      .trim() || "Document";
+  }
+
+  function docVaultSafeFileName(fileName) {
+    const cleaned = String(fileName || "document.png")
+      .trim()
+      .replace(/\s+/g, "-")
+      .replace(/[^a-zA-Z0-9._-]/g, "");
+
+    return cleaned || `document-${Date.now()}.png`;
+  }
+
+  function docVaultExtFromMime(mimeType) {
+    if (mimeType === "image/jpeg") return "jpg";
+    if (mimeType === "image/webp") return "webp";
+    if (mimeType === "image/gif") return "gif";
+    return "png";
+  }
+
+  function docVaultFormatBytes(bytes) {
+    const value = Number(bytes || 0);
+    if (value < 1024) return `${value} B`;
+    if (value < 1024 * 1024) return `${(value / 1024).toFixed(1)} KB`;
+    return `${(value / (1024 * 1024)).toFixed(2)} MB`;
+  }
+
+  function docVaultFormatDateTime(value) {
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return "-";
+
+    return date.toLocaleString(undefined, {
+      year: "numeric",
+      month: "short",
+      day: "2-digit",
+      hour: "2-digit",
+      minute: "2-digit"
+    });
+  }
+
+  function docVaultEscapeHtml(value) {
+    return String(value ?? "")
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;")
+      .replace(/'/g, "&#039;");
+  }
+  // ===== End Document Vault =====
