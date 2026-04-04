@@ -1651,7 +1651,101 @@ function renderCustomerContacts(customer) {
   previewUrl: "",
   source: "upload"
 };
+function applyInvoiceDocumentLayout() {
+  const fileInput = document.getElementById("invoiceDocumentFileInput");
+  const notesInput = document.getElementById("invoiceDocumentNotes");
+  const previewWrap = document.getElementById("invoiceDocumentPreviewWrap");
+  const previewImg = document.getElementById("invoiceDocumentPreviewImg");
+  const clearBtn = document.getElementById("clearInvoiceDocumentBtn");
+  const statusBox = document.getElementById("invoiceDocumentStatus");
 
+  if (!fileInput || !previewWrap || !previewImg || !clearBtn || !statusBox) return;
+
+  const panel =
+    fileInput.closest(".panel") ||
+    fileInput.closest(".soft-panel") ||
+    fileInput.parentElement;
+
+  if (!panel) return;
+
+  const fileField = fileInput.closest(".field") || fileInput.parentElement;
+  const notesField = notesInput?.closest(".field");
+
+  if (notesField) {
+    notesField.classList.add("hidden");
+  }
+
+  let layout = document.getElementById("invoiceDocumentLayoutRow");
+  let leftCol = document.getElementById("invoiceDocumentLeftCol");
+  let rightCol = document.getElementById("invoiceDocumentRightCol");
+  let clearWrap = document.getElementById("invoiceDocumentClearWrap");
+
+  if (!layout) {
+    layout = document.createElement("div");
+    layout.id = "invoiceDocumentLayoutRow";
+    layout.style.display = "flex";
+    layout.style.gap = "18px";
+    layout.style.alignItems = "flex-start";
+    layout.style.marginTop = "12px";
+    layout.style.flexWrap = "wrap";
+
+    leftCol = document.createElement("div");
+    leftCol.id = "invoiceDocumentLeftCol";
+    leftCol.style.flex = "1 1 340px";
+    leftCol.style.minWidth = "320px";
+
+    rightCol = document.createElement("div");
+    rightCol.id = "invoiceDocumentRightCol";
+    rightCol.style.flex = "0 0 360px";
+    rightCol.style.maxWidth = "360px";
+    rightCol.style.width = "100%";
+
+    layout.appendChild(leftCol);
+    layout.appendChild(rightCol);
+    panel.appendChild(layout);
+  }
+
+  if (fileField && fileField.parentElement !== leftCol) {
+    leftCol.appendChild(fileField);
+  }
+
+  if (!clearWrap) {
+    clearWrap = document.createElement("div");
+    clearWrap.id = "invoiceDocumentClearWrap";
+    clearWrap.style.marginTop = "12px";
+    leftCol.appendChild(clearWrap);
+  }
+
+  if (clearBtn.parentElement !== clearWrap) {
+    clearWrap.appendChild(clearBtn);
+  }
+
+  if (statusBox.parentElement !== leftCol) {
+    leftCol.appendChild(statusBox);
+  }
+
+  if (previewWrap.parentElement !== rightCol) {
+    rightCol.appendChild(previewWrap);
+  }
+
+  if (fileField) {
+    fileField.style.maxWidth = "100%";
+  }
+
+  statusBox.style.marginTop = "12px";
+  statusBox.style.maxWidth = "100%";
+
+  previewWrap.style.display = previewWrap.classList.contains("hidden") ? "none" : "block";
+  previewWrap.style.width = "100%";
+  previewWrap.style.maxWidth = "360px";
+  previewWrap.style.marginTop = "0";
+
+  previewImg.style.width = "100%";
+  previewImg.style.maxWidth = "360px";
+  previewImg.style.maxHeight = "520px";
+  previewImg.style.objectFit = "contain";
+  previewImg.style.borderRadius = "12px";
+}
 function initInvoiceDocumentFlow() {
   const fileInput = document.getElementById("invoiceDocumentFileInput");
   const clearBtn = document.getElementById("clearInvoiceDocumentBtn");
@@ -1675,9 +1769,11 @@ function initInvoiceDocumentFlow() {
   });
 
   setInvoiceDocumentStatus(
-    "Optional. Upload an image. It will be saved to Document Vault using the invoice number after the invoice is saved.",
-    false
-  );
+  "Optional. Upload an image. It will be saved to Document Vault using the invoice number after the invoice is saved.",
+  false
+);
+
+applyInvoiceDocumentLayout();
 }
 
 function applyInvoiceDocumentFile(file) {
@@ -1706,9 +1802,11 @@ function applyInvoiceDocumentFile(file) {
   }
 
   setInvoiceDocumentStatus(
-    "Image ready. When you click Save Invoice, this image will also be saved into Document Vault.",
-    false
-  );
+  "Image ready. When you click Save Invoice, this image will also be saved into Document Vault.",
+  false
+);
+
+applyInvoiceDocumentLayout();
 }
 
 function clearInvoiceDocumentDraft(resetStatus = false) {
@@ -1731,11 +1829,13 @@ function clearInvoiceDocumentDraft(resetStatus = false) {
   if (previewWrap) previewWrap.classList.add("hidden");
 
   if (resetStatus) {
-    setInvoiceDocumentStatus(
-      "Optional. Upload an image. It will be saved to Document Vault using the invoice number after the invoice is saved.",
-      false
-    );
-  }
+  setInvoiceDocumentStatus(
+    "Optional. Upload an image. It will be saved to Document Vault using the invoice number after the invoice is saved.",
+    false
+  );
+}
+
+applyInvoiceDocumentLayout();
 }
 
 function setInvoiceDocumentStatus(message, isError) {
