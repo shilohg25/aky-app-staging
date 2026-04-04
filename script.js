@@ -2754,14 +2754,14 @@ async function saveInvoice() {
       throw new Error(uploadError.message || "Payment document upload failed.");
     }
 
-    const { error: insertError } = await supabaseClient
+    const { data: insertedDoc, error: insertError } = await supabaseClient
       .from("customer_documents")
       .insert({
         customer_id: customer.id,
         invoice_id: null,
         payment_id: payment.id,
         origin_screen: "payment_modal",
-        category: "payment",
+        category: "payment_proof",
         title,
         reference_code: referenceCode,
         notes: null,
@@ -2771,11 +2771,17 @@ async function saveInvoice() {
         storage_path: storagePath,
         source: paymentDocumentState.source,
         uploaded_by: authData.user.id
-      });
+      })
+      .select("id")
+      .single();
 
-    if (insertError) {
+    if (insertError || !insertedDoc?.id) {
       await supabaseClient.storage.from("customer-documents").remove([storagePath]);
-      throw new Error(insertError.message || "Payment document record could not be saved.");
+      throw new Error(insertError?.message || "Payment document record could not be saved.");
+    }
+
+    if (typeof loadCustomerDocuments === "function") {
+      await loadCustomerDocuments();
     }
 
     clearPaymentDocumentDraft(true);
