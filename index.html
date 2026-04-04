@@ -826,7 +826,7 @@
       </div>
 
       <div class="form-grid one-col">
-        <div class="field">
+                <div class="field">
           <label for="paymentMethodSelect">Payment Method *</label>
           <select id="paymentMethodSelect">
             <option value="">Select</option>
@@ -835,6 +835,31 @@
             <option value="Online">Online</option>
           </select>
         </div>
+        <div class="panel soft-panel">
+          <div class="panel-row">
+            <h4 class="panel-title small-title">Payment Proof</h4>
+          </div>
+
+          <div class="form-grid one-col" style="margin-top:12px;">
+            <div class="field">
+              <label for="paymentDocumentFileInput">Upload Payment Proof Image</label>
+              <input id="paymentDocumentFileInput" type="file" accept="image/*" />
+            </div>
+          </div>
+
+          <div id="paymentDocumentPreviewWrap" class="doc-preview-wrap hidden">
+            <img id="paymentDocumentPreviewImg" class="doc-preview-img" alt="Payment proof preview" />
+          </div>
+
+          <div class="btn-row" style="margin-top:12px;">
+            <button id="clearPaymentDocumentBtn" class="btn btn-light" type="button">Remove Document</button>
+          </div>
+
+          <div id="paymentDocumentStatus" class="info-box" style="margin-top:12px;">
+            Optional. Upload one payment proof image. It will be saved to Document Vault after the payment is saved.
+          </div>
+        </div>
+
 <div class="panel soft-panel ai-assist-panel owner-access hidden">
   <div class="panel-row">
     <h4 class="panel-title small-title">AI Payment Proof Assist</h4>
