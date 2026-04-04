@@ -150,6 +150,7 @@
               <table class="records-table">
                 <thead>
                   <tr>
+  <tr>
   <th>Date</th>
   <th>Type</th>
   <th>Method</th>
@@ -157,7 +158,9 @@
   <th>Gross Amount</th>
   <th>Applied To</th>
   <th>Created By</th>
+  <th>Details</th>
 </tr>
+
                 </thead>
                 <tbody id="paymentTableBody"></tbody>
               </table>
@@ -746,15 +749,15 @@
     </div>
   </div>
 
-  <div id="invoiceViewModal" class="modal">
-    <div class="modal-content large-modal">
-      <div class="modal-header">
-        <h3>Invoice Details</h3>
-        <button id="closeInvoiceViewModalBtn" class="icon-btn" type="button">&times;</button>
-      </div>
-      <div id="invoiceViewContent"></div>
+  <div id="paymentViewModal" class="modal">
+  <div class="modal-content large-modal">
+    <div class="modal-header">
+      <h3>Payment Details</h3>
+      <button id="closePaymentViewModalBtn" class="icon-btn" type="button">&times;</button>
     </div>
+    <div id="paymentViewContent"></div>
   </div>
+</div>
 
   <div id="paymentTypeModal" class="modal">
     <div class="modal-content medium-modal">
