@@ -107,7 +107,9 @@ saveInvoiceBtn: byId("saveInvoiceBtn"),
       invoiceViewModal: byId("invoiceViewModal"),
       closeInvoiceViewModalBtn: byId("closeInvoiceViewModalBtn"),
       invoiceViewContent: byId("invoiceViewContent"),
-
+paymentViewModal: byId("paymentViewModal"),
+      closePaymentViewModalBtn: byId("closePaymentViewModalBtn"),
+      paymentViewContent: byId("paymentViewContent"),
       paymentTypeModal: byId("paymentTypeModal"),
       closePaymentTypeModalBtn: byId("closePaymentTypeModalBtn"),
       payByInvoiceBtn: byId("payByInvoiceBtn"),
@@ -278,7 +280,7 @@ el.addLineBtn.addEventListener("click", () => addLineItemRow());
 el.saveInvoiceBtn.addEventListener("click", saveInvoice);
 
     el.closeInvoiceViewModalBtn.addEventListener("click", () => closeModal(el.invoiceViewModal));
-
+el.closePaymentViewModalBtn?.addEventListener("click", () => closeModal(el.paymentViewModal));
     el.makePaymentBtn.addEventListener("click", openPaymentTypeModal);
     el.closePaymentTypeModalBtn.addEventListener("click", () => closeModal(el.paymentTypeModal));
     el.payByInvoiceBtn.addEventListener("click", openPayByInvoiceStep);
@@ -2996,31 +2998,252 @@ async function saveInvoice() {
     await refreshSelectedCustomerOnly();
     alert(successMessage + taxSuccessText + documentSuccessText + documentErrorText);
   }
-  function renderPaymentTable(customer) {
-    el.paymentTableBody.innerHTML = "";
-    if (!customer.payments.length) {
-      el.paymentTableBody.innerHTML = `<tr><td colspan="7" class="muted">No payments yet.</td></tr>`;
-      return;
-    }
-    customer.payments.slice().sort((a, b) => String(b.payment_date).localeCompare(String(a.payment_date))).forEach((payment) => {
-      const appliedTo = payment.allocations.map((alloc) => {
+  function viewPayment(paymentId) {
+  const customer = getSelectedCustomer();
+  if (!customer) return;
+
+  const payment = customer.payments.find((item) => item.id === paymentId);
+  if (!payment) return;
+
+  const details = getPaymentDetailsObject(payment);
+  const allocations = Array.isArray(payment.allocations) ? payment.allocations : [];
+  const paymentStatus = payment.method === "Cheque"
+    ? getChequeStatus(payment)
+    : (payment.cleared === false ? "Pending" : "Collected");
+
+  const appliedRowsHtml = allocations.length
+    ? allocations.map((alloc) => {
         const invoice = state.invoices.find((inv) => inv.id === alloc.invoice_id);
-                return `${getInvoiceReferenceLabel(invoice)} (${formatPeso(getAllocationAmount(alloc))})`;
+        return `
+          <tr>
+            <td>${escapeHtml(getInvoiceReferenceLabel(invoice))}</td>
+            <td>${formatPeso(getAllocationAmount(alloc))}</td>
+          </tr>
+        `;
+      }).join("")
+    : `<tr><td colspan="2" class="muted">No invoice allocations.</td></tr>`;
+
+  const replacementInfoHtml = details.isReplacementPayment
+    ? `
+      <div class="info-box" style="margin-top:16px;">
+        Replacement Payment<br>
+        Replaces Cheque #: <strong>${escapeHtml(details.replacesChequeNumber || "-")}</strong><br>
+        Root Ref: <strong>${escapeHtml(details.replacementRootPaymentId || details.replacesPaymentId || "-")}</strong>
+      </div>
+    `
+    : "";
+
+  const withholdingInfoHtml = details.withholdingTaxApplied
+    ? `
+      <div class="info-box" style="margin-top:16px;">
+        Withholding Tax: <strong>${formatPeso(details.withholdingTaxAmount || 0)}</strong><br>
+        Net Received: <strong>${formatPeso(details.netReceivedAmount ?? payment.amount ?? 0)}</strong><br>
+        Formula: <strong>${escapeHtml(details.withholdingTaxFormula || "gross / (1 + vat_rate) × tax_rate")}</strong>
+      </div>
+    `
+    : "";
+
+  el.paymentViewContent.innerHTML = `
+    <div class="invoice-meta-grid">
+      <div class="invoice-meta-card"><span>Date</span><strong>${escapeHtml(payment.payment_date || "-")}</strong></div>
+      <div class="invoice-meta-card"><span>Type</span><strong>${escapeHtml(getPaymentTypeLabel(payment))}</strong></div>
+      <div class="invoice-meta-card"><span>Method</span><strong>${escapeHtml(payment.method || "-")}</strong></div>
+      <div class="invoice-meta-card"><span>Status</span><strong>${escapeHtml(paymentStatus)}</strong></div>
+    </div>
+
+    <div class="summary-grid" style="margin-bottom:16px;">
+      <div class="panel summary-card"><span class="summary-label">Gross Amount</span><strong>${formatPeso(payment.amount)}</strong></div>
+      <div class="panel summary-card"><span class="summary-label">Created By</span><strong>${escapeHtml(payment.created_by_name || "-")}</strong></div>
+      <div class="panel summary-card"><span class="summary-label">Created Role</span><strong>${escapeHtml(payment.created_by_role || "-")}</strong></div>
+      <div class="panel summary-card"><span class="summary-label">Created At</span><strong>${escapeHtml(payment.created_at ? formatDateTime(payment.created_at) : "-")}</strong></div>
+    </div>
+
+    <div class="panel" style="margin-bottom:16px;">
+      <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:12px;">
+        <strong>Payment Reference</strong>
+        <span class="muted">Saved payment details</span>
+      </div>
+      <div class="form-grid" style="grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;">
+        <div class="invoice-meta-card">
+          <span>Bank / Platform</span>
+          <strong>${escapeHtml(details.platformName || details.bankAccountNumber || "-")}</strong>
+        </div>
+        <div class="invoice-meta-card">
+          <span>Reference / Cheque #</span>
+          <strong>${escapeHtml(details.referenceNumber || details.chequeNumber || "-")}</strong>
+        </div>
+        <div class="invoice-meta-card">
+          <span>Cheque Date</span>
+          <strong>${escapeHtml(details.chequeDate || "-")}</strong>
+        </div>
+        <div class="invoice-meta-card">
+          <span>Post-Dated</span>
+          <strong>${details.isPostDated ? "Yes" : "No"}</strong>
+        </div>
+      </div>
+    </div>
+
+    <div class="panel" style="margin-bottom:16px;">
+      <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:12px;">
+        <strong>Payment Proof</strong>
+        <span class="muted">Latest linked upload</span>
+      </div>
+      <div
+        id="paymentDocumentPreviewSlot"
+        data-payment-id="${payment.id}"
+        style="min-height:120px;display:flex;align-items:center;justify-content:center;background:#f8fbff;border:1px solid var(--line);border-radius:14px;padding:14px;"
+      >
+        <span class="muted">Loading payment proof...</span>
+      </div>
+    </div>
+
+    <div class="table-wrap">
+      <table class="records-table">
+        <thead>
+          <tr>
+            <th>Applied Invoice</th>
+            <th>Allocated Amount</th>
+          </tr>
+        </thead>
+        <tbody>${appliedRowsHtml}</tbody>
+      </table>
+    </div>
+
+    ${replacementInfoHtml}
+    ${withholdingInfoHtml}
+  `;
+
+  openModal(el.paymentViewModal);
+
+  void (async () => {
+    const previewSlot = document.getElementById("paymentDocumentPreviewSlot");
+    if (!previewSlot) return;
+
+    try {
+      const { data: docs, error: docsError } = await supabaseClient
+        .from("customer_documents")
+        .select("id, storage_path, mime_type, title, file_name, uploaded_at")
+        .eq("customer_id", customer.id)
+        .eq("payment_id", payment.id)
+        .order("uploaded_at", { ascending: false })
+        .limit(1);
+
+      if (docsError) {
+        throw new Error(docsError.message || "Could not load payment proof record.");
+      }
+
+      const doc = Array.isArray(docs) && docs.length ? docs[0] : null;
+
+      if (!doc?.storage_path) {
+        previewSlot.innerHTML = `<div class="muted">No uploaded payment proof for this payment yet.</div>`;
+        return;
+      }
+
+      const { data: fileBlob, error: fileError } = await supabaseClient.storage
+        .from("customer-documents")
+        .download(doc.storage_path);
+
+      if (fileError || !fileBlob) {
+        throw new Error(fileError?.message || "Could not load payment proof file.");
+      }
+
+      const currentSlot = document.getElementById("paymentDocumentPreviewSlot");
+      if (!currentSlot || currentSlot.getAttribute("data-payment-id") !== String(payment.id)) {
+        return;
+      }
+
+      if (window.__akyPaymentPreviewUrl) {
+        URL.revokeObjectURL(window.__akyPaymentPreviewUrl);
+      }
+
+      const blobUrl = URL.createObjectURL(fileBlob);
+      window.__akyPaymentPreviewUrl = blobUrl;
+
+      const safeTitle = escapeHtml(doc.title || doc.file_name || "Payment proof");
+      const safeFileName = escapeHtml(doc.file_name || "payment-proof");
+      const isImage = String(doc.mime_type || "").toLowerCase().startsWith("image/");
+
+      if (!isImage) {
+        currentSlot.innerHTML = `
+          <div style="width:100%;text-align:center;">
+            <div class="muted" style="margin-bottom:12px;">A linked document exists, but it is not an image preview.</div>
+            <div style="font-weight:700;margin-bottom:12px;">${safeTitle}</div>
+            <button class="btn btn-light" type="button" id="paymentDocumentOpenBtn">Open Document</button>
+          </div>
+        `;
+
+        document.getElementById("paymentDocumentOpenBtn")?.addEventListener("click", () => {
+          window.open(blobUrl, "_blank", "noopener,noreferrer");
+        });
+
+        return;
+      }
+
+      currentSlot.innerHTML = `
+        <div style="width:100%;">
+          <div class="muted" style="margin-bottom:10px;">${safeFileName}</div>
+          <img
+            src="${blobUrl}"
+            alt="${safeTitle}"
+            style="display:block;width:100%;max-height:480px;object-fit:contain;border:1px solid var(--line);border-radius:12px;background:#ffffff;"
+          />
+          <div class="btn-row" style="margin-top:12px;">
+            <button class="btn btn-light" type="button" id="paymentDocumentOpenBtn">Open Full Image</button>
+          </div>
+        </div>
+      `;
+
+      document.getElementById("paymentDocumentOpenBtn")?.addEventListener("click", () => {
+        window.open(blobUrl, "_blank", "noopener,noreferrer");
+      });
+    } catch (error) {
+      const currentSlot = document.getElementById("paymentDocumentPreviewSlot");
+      if (!currentSlot || currentSlot.getAttribute("data-payment-id") !== String(payment.id)) {
+        return;
+      }
+
+      currentSlot.innerHTML = `
+        <div class="muted">Could not load payment proof.</div>
+        <div class="muted" style="margin-top:6px;">${escapeHtml(error.message || "Unknown error.")}</div>
+      `;
+    }
+  })();
+}
+
+function renderPaymentTable(customer) {
+  el.paymentTableBody.innerHTML = "";
+  if (!customer.payments.length) {
+    el.paymentTableBody.innerHTML = `<tr><td colspan="8" class="muted">No payments yet.</td></tr>`;
+    return;
+  }
+
+  customer.payments
+    .slice()
+    .sort((a, b) => String(b.payment_date).localeCompare(String(a.payment_date)))
+    .forEach((payment) => {
+      const appliedTo = (payment.allocations || []).map((alloc) => {
+        const invoice = state.invoices.find((inv) => inv.id === alloc.invoice_id);
+        return `${getInvoiceReferenceLabel(invoice)} (${formatPeso(getAllocationAmount(alloc))})`;
       }).join(", ");
+
       const details = formatPaymentDetails(payment);
       const row = document.createElement("tr");
+
       row.innerHTML = `
-          <td>${escapeHtml(payment.payment_date)}</td>
-          <td>${escapeHtml(getPaymentTypeLabel(payment))}</td>
-          <td>${escapeHtml(payment.method)}</td>
-          <td>${details}</td>
-          <td>${formatPeso(payment.amount)}</td>
-          <td>${escapeHtml(appliedTo || "-")}</td>
-          <td>${escapeHtml(payment.created_by_name || "-")}</td>
+        <td>${escapeHtml(payment.payment_date)}</td>
+        <td>${escapeHtml(getPaymentTypeLabel(payment))}</td>
+        <td>${escapeHtml(payment.method)}</td>
+        <td>${details}</td>
+        <td>${formatPeso(payment.amount)}</td>
+        <td>${escapeHtml(appliedTo || "-")}</td>
+        <td>${escapeHtml(payment.created_by_name || "-")}</td>
+        <td class="clickable">Details</td>
       `;
+
+      row.querySelector(".clickable")?.addEventListener("click", () => viewPayment(payment.id));
       el.paymentTableBody.appendChild(row);
     });
-  }
+}
 
   function renderExecutiveView() {
     if (!canViewExecutive()) return;
