@@ -2131,15 +2131,8 @@ async function saveInvoice() {
     </tr>
   `).join("");
 
-  let actionButtons = "";
-
-  if (canEditInvoiceRecord(invoice)) {
-    actionButtons += `<button class="btn btn-light" id="invoiceViewEditBtn">Edit Invoice</button>`;
-  }
-
-  if (canRequestTbv() && !tbv) {
-    actionButtons += `<button class="btn btn-danger" id="invoiceViewTbvBtn">TBV</button>`;
-  }
+  const showEdit = canEditInvoiceRecord(invoice);
+  const showTbv = canRequestTbv() && !tbv;
 
   el.invoiceViewContent.innerHTML = `
     <div class="invoice-meta-grid">
@@ -2184,7 +2177,10 @@ async function saveInvoice() {
 
     ${tbv ? `<div class="alert-box" style="margin-top:16px;">TBV status: ${escapeHtml(tbv.status)} | Explanation: ${escapeHtml(tbv.explanation)}</div>` : ""}
 
-    <div class="btn-row" style="margin-top:16px;">${actionButtons}</div>
+    <div class="btn-row" style="margin-top:16px;">
+      ${showEdit ? `<button class="btn btn-light" id="invoiceViewEditBtn">Edit Invoice</button>` : ""}
+      ${showTbv ? `<button class="btn btn-danger" id="invoiceViewTbvBtn">TBV</button>` : ""}
+    </div>
   `;
 
   openModal(el.invoiceViewModal);
@@ -2201,37 +2197,37 @@ async function saveInvoice() {
 }
 
   function renderInvoiceTable(customer) {
-    el.invoiceTableBody.innerHTML = "";
-    if (!customer.invoices.length) {
-      el.invoiceTableBody.innerHTML = `<tr><td colspan="10" class="muted">No invoices yet.</td></tr>`;
-      return;
-    }
+  el.invoiceTableBody.innerHTML = "";
 
-    customer.invoices.slice().sort((a, b) => String(b.invoice_date).localeCompare(String(a.invoice_date))).forEach((invoice) => {
+  if (!customer.invoices.length) {
+    el.invoiceTableBody.innerHTML = `<tr><td colspan="10" class="muted">No invoices yet.</td></tr>`;
+    return;
+  }
+
+  customer.invoices
+    .slice()
+    .sort((a, b) => String(b.invoice_date).localeCompare(String(a.invoice_date)))
+    .forEach((invoice) => {
       const tbv = state.tbvs.find((t) => t.invoice_id === invoice.id && t.status === "PENDING");
       const tr = document.createElement("tr");
-      let actionHtml = `<button class="btn btn-light action-view">View</button>`;
-            if (canEditInvoiceRecord(invoice)) actionHtml += ` <button class="btn btn-primary action-edit">Edit</button>`;
-      if (canRequestTbv() && !tbv) actionHtml += ` <button class="btn btn-danger action-tbv">TBV</button>`;
+
       tr.innerHTML = `
-          <td class="clickable">${escapeHtml(invoice.invoice_number)}</td>
-          <td>${escapeHtml(invoice.invoice_date)}</td>
-          <td>${escapeHtml(invoice.po_number || "-")}</td>
-          <td>${escapeHtml(invoice.reference_info || "-")}</td>
-          <td>${formatPeso(invoice.total)}</td>
-          <td>${formatPeso(invoice.paidAmount)}</td>
-          <td>${formatPeso(invoice.balance)}</td>
-          <td>${statusPill(invoice.status)}</td>
-          <td>${tbv ? `<span class="notice-pill notice-postdated">PENDING</span>` : "-"}</td>
-          <td><div class="row-actions">${actionHtml}</div></td>
+        <td class="clickable">${escapeHtml(invoice.invoice_number)}</td>
+        <td>${escapeHtml(invoice.invoice_date)}</td>
+        <td>${escapeHtml(invoice.po_number || "-")}</td>
+        <td>${escapeHtml(invoice.reference_info || "-")}</td>
+        <td>${formatPeso(invoice.total)}</td>
+        <td>${formatPeso(invoice.paidAmount)}</td>
+        <td>${formatPeso(invoice.balance)}</td>
+        <td>${statusPill(invoice.status)}</td>
+        <td>${tbv ? `<span class="notice-pill notice-postdated">PENDING</span>` : "-"}</td>
+        <td class="muted">Click invoice #</td>
       `;
+
       tr.querySelector(".clickable").addEventListener("click", () => viewInvoice(invoice.id));
-      tr.querySelector(".action-view").addEventListener("click", () => viewInvoice(invoice.id));
-      tr.querySelector(".action-edit")?.addEventListener("click", () => openInvoiceModalForEdit(invoice.id));
-      tr.querySelector(".action-tbv")?.addEventListener("click", () => openTbvModal(invoice.id));
       el.invoiceTableBody.appendChild(tr);
     });
-  }
+}
 
   function openPaymentTypeModal() {
     const customer = getSelectedCustomer();
