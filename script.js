@@ -3923,6 +3923,10 @@ function formatCompactPeso(value) {
 }
 
   async function analyzeInvoiceDocumentWithAi() {
+    if (state.currentProfile?.role !== "owner") {
+  alert("Only owner can use AI Assist.");
+  return;
+}
     const statusBox = document.getElementById("invoiceAiStatus");
     const imageDataUrl = aiDocAssist.invoice.imageDataUrl;
     const customer = getSelectedCustomer();
@@ -4019,6 +4023,10 @@ function formatCompactPeso(value) {
   }
 
   async function analyzePaymentDocumentWithAi() {
+    if (state.currentProfile?.role !== "owner") {
+  alert("Only owner can use AI Assist.");
+  return;
+}
     const statusBox = document.getElementById("paymentAiStatus");
     const imageDataUrl = aiDocAssist.payment.imageDataUrl;
     const customer = getSelectedCustomer();
