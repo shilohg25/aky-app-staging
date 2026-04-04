@@ -4356,103 +4356,195 @@ function formatCompactPeso(value) {
   initDocumentVault();
 
   function initDocumentVault() {
-    const fileInput = document.getElementById("customerDocumentFileInput");
-    const pasteZone = document.getElementById("customerDocumentPasteZone");
-    const saveBtn = document.getElementById("saveCustomerDocumentBtn");
-    const clearBtn = document.getElementById("clearCustomerDocumentBtn");
-    const docsTableBody = document.getElementById("customerDocumentsTableBody");
+  const fileInput = document.getElementById("customerDocumentFileInput");
+  const saveBtn = document.getElementById("saveCustomerDocumentBtn");
+  const clearBtn = document.getElementById("clearCustomerDocumentBtn");
+  const docsTableBody = document.getElementById("customerDocumentsTableBody");
 
-    if (!fileInput || !pasteZone || !saveBtn || !clearBtn || !docsTableBody) {
-      return;
+  if (!fileInput || !saveBtn || !clearBtn || !docsTableBody) {
+    return;
+  }
+
+  ensureDocVaultPopupShell();
+
+  fileInput.addEventListener("change", async (event) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    try {
+      applyDocumentVaultFile(file, "upload");
+    } catch (error) {
+      setDocumentVaultStatus(error.message || "Could not use that file.", true);
+      fileInput.value = "";
+    }
+  });
+
+  saveBtn.addEventListener("click", saveCustomerDocument);
+  clearBtn.addEventListener("click", () => clearDocumentVaultDraft(true));
+
+  docsTableBody.addEventListener("click", async (event) => {
+    const button = event.target.closest("[data-doc-action]");
+    if (!button) return;
+
+    const action = button.getAttribute("data-doc-action");
+    const docId = button.getAttribute("data-doc-id");
+    if (!action || !docId) return;
+
+    if (action === "view") {
+      await openCustomerDocument(docId);
     }
 
-    fileInput.addEventListener("change", async (event) => {
-      const file = event.target.files?.[0];
-      if (!file) return;
+    if (action === "delete") {
+      await deleteCustomerDocument(docId);
+    }
+  });
 
-      try {
-        applyDocumentVaultFile(file, "upload");
-      } catch (error) {
-        setDocumentVaultStatus(error.message || "Could not read file.", true);
-        fileInput.value = "";
-      }
-    });
-
-    pasteZone.addEventListener("click", () => pasteZone.focus());
-
-    pasteZone.addEventListener("paste", async (event) => {
-      const items = [...(event.clipboardData?.items || [])];
-      const imageItem = items.find((item) => item.type.startsWith("image/"));
-
-      if (!imageItem) {
-        setDocumentVaultStatus("No image found in clipboard. Copy a snippet first, then press Ctrl + V here.", true);
-        return;
-      }
-
-      event.preventDefault();
-
-      const blob = imageItem.getAsFile();
-      if (!blob) {
-        setDocumentVaultStatus("Clipboard image could not be read. Try copying it again.", true);
-        return;
-      }
-
-      try {
-        const extension = docVaultExtFromMime(blob.type || "image/png");
-        const pastedFile = new File(
-          [blob],
-          `pasted-document-${Date.now()}.${extension}`,
-          { type: blob.type || "image/png" }
-        );
-
-        applyDocumentVaultFile(pastedFile, "paste");
-      } catch (error) {
-        setDocumentVaultStatus(error.message || "Could not use pasted image.", true);
-      }
-    });
-
-    saveBtn.addEventListener("click", saveCustomerDocument);
-    clearBtn.addEventListener("click", () => clearDocumentVaultDraft(true));
-
-    docsTableBody.addEventListener("click", async (event) => {
-      const button = event.target.closest("[data-doc-action]");
-      if (!button) return;
-
-      const action = button.getAttribute("data-doc-action");
-      const docId = button.getAttribute("data-doc-id");
-      if (!action || !docId) return;
-
-      if (action === "view") {
-        await openCustomerDocument(docId);
-      }
-
-      if (action === "delete") {
-        await deleteCustomerDocument(docId);
-      }
-    });
-
-    setInterval(syncDocumentVaultCustomer, 1200);
-    syncDocumentVaultCustomer();
-  }
+  setInterval(syncDocumentVaultCustomer, 1200);
+  syncDocumentVaultCustomer();
+}
 function ensureDocVaultStandaloneButton() {
   const hint = document.getElementById("docVaultCustomerHint");
   if (!hint) return null;
 
-  let row = document.getElementById("docVaultStandaloneRow");
-  if (!row) {
-    row = document.createElement("div");
-    row.id = "docVaultStandaloneRow";
-    row.className = "btn-row";
-    row.style.margin = "8px 0 12px";
-    row.innerHTML = `
-      <button type="button" class="btn btn-light" id="docVaultStandaloneBtn">
-        Add Other Document
-      </button>
-    `;
-    hint.insertAdjacentElement("afterend", row);
+  let bar = document.getElementById("docVaultHeaderBar");
+  if (!bar) {
+    bar = document.createElement("div");
+    bar.id = "docVaultHeaderBar";
+    bar.style.display = "flex";
+    bar.style.justifyContent = "flex-end";
+    bar.style.alignItems = "center";
+    bar.style.gap = "10px";
+    bar.style.margin = "8px 0 12px";
+    hint.insertAdjacentElement("afterend", bar);
   }
 
-  return row.querySelector("#docVaultStandaloneBtn");
+  let btn = document.getElementById("docVaultStandaloneBtn");
+  if (!btn) {
+    btn = document.createElement("button");
+    btn.type = "button";
+    btn.id = "docVaultStandaloneBtn";
+    btn.className = "btn btn-light small-btn";
+    btn.style.padding = "8px 12px";
+    btn.style.borderRadius = "10px";
+    btn.textContent = "+ Other Document";
+    bar.appendChild(btn);
+  }
+
+  return btn;
+}
+  function ensureDocVaultPopupShell() {
+  const uploader = document.getElementById("docVaultUploader");
+  if (!uploader) return null;
+
+  let overlay = document.getElementById("docVaultPopupOverlay");
+  let panel = document.getElementById("docVaultPopupPanel");
+
+  if (!overlay) {
+    overlay = document.createElement("div");
+    overlay.id = "docVaultPopupOverlay";
+    overlay.className = "hidden";
+    overlay.style.position = "fixed";
+    overlay.style.inset = "0";
+    overlay.style.background = "rgba(15, 23, 42, 0.45)";
+    overlay.style.zIndex = "9999";
+    overlay.style.display = "flex";
+    overlay.style.alignItems = "center";
+    overlay.style.justifyContent = "center";
+    overlay.style.padding = "20px";
+
+    panel = document.createElement("div");
+    panel.id = "docVaultPopupPanel";
+    panel.style.width = "100%";
+    panel.style.maxWidth = "720px";
+    panel.style.maxHeight = "90vh";
+    panel.style.overflowY = "auto";
+    panel.style.background = "#ffffff";
+    panel.style.borderRadius = "18px";
+    panel.style.boxShadow = "0 24px 70px rgba(0,0,0,0.18)";
+    panel.style.padding = "18px";
+
+    overlay.appendChild(panel);
+    document.body.appendChild(overlay);
+
+    overlay.addEventListener("click", (event) => {
+      if (event.target === overlay) {
+        closeDocVaultPopup();
+      }
+    });
+  }
+
+  if (panel && uploader.parentElement !== panel) {
+    panel.appendChild(uploader);
+  }
+
+  uploader.classList.remove("hidden");
+  uploader.style.margin = "0";
+  uploader.style.padding = "0";
+  uploader.style.border = "0";
+  uploader.style.background = "transparent";
+  uploader.style.boxShadow = "none";
+
+  let popupHeader = document.getElementById("docVaultPopupHeader");
+  if (!popupHeader) {
+    popupHeader = document.createElement("div");
+    popupHeader.id = "docVaultPopupHeader";
+    popupHeader.style.display = "flex";
+    popupHeader.style.justifyContent = "space-between";
+    popupHeader.style.alignItems = "center";
+    popupHeader.style.gap = "12px";
+    popupHeader.style.marginBottom = "14px";
+    popupHeader.innerHTML = `
+      <h3 style="margin:0;font-size:20px;">Other Customer Document</h3>
+      <button type="button" id="closeDocVaultPopupBtn" class="icon-btn">&times;</button>
+    `;
+    uploader.prepend(popupHeader);
+    document.getElementById("closeDocVaultPopupBtn")?.addEventListener("click", closeDocVaultPopup);
+  }
+
+  const pasteZone = document.getElementById("customerDocumentPasteZone");
+  if (pasteZone) {
+    pasteZone.classList.add("hidden");
+  }
+
+  const notesInput = document.getElementById("customerDocumentNotes");
+  const notesField = notesInput?.closest(".field");
+  if (notesInput) notesInput.value = "";
+  if (notesField) notesField.classList.add("hidden");
+
+  const previewWrap = document.getElementById("customerDocumentPreviewWrap");
+  if (previewWrap) {
+    previewWrap.style.maxWidth = "280px";
+  }
+
+  const chooseWrap =
+    document.getElementById("customerDocumentFileInput")?.closest(".field") ||
+    document.getElementById("customerDocumentFileInput")?.parentElement;
+  if (chooseWrap) {
+    chooseWrap.style.maxWidth = "220px";
+    chooseWrap.style.marginLeft = "auto";
+  }
+
+  return overlay;
+}
+
+function openDocVaultPopup() {
+  const overlay = ensureDocVaultPopupShell();
+  if (!overlay) return;
+
+  documentVaultState.standaloneOpen = true;
+  overlay.classList.remove("hidden");
+  document.body.style.overflow = "hidden";
+
+  setDocumentVaultStatus("Upload an image for a rare standalone customer document. Max 6MB.", false);
+}
+
+function closeDocVaultPopup() {
+  const overlay = document.getElementById("docVaultPopupOverlay");
+  if (overlay) overlay.classList.add("hidden");
+
+  documentVaultState.standaloneOpen = false;
+  document.body.style.overflow = "";
+  clearDocumentVaultDraft(false);
 }
   function syncDocumentVaultCustomer() {
   if (typeof getSelectedCustomer !== "function") return;
@@ -4468,49 +4560,15 @@ function ensureDocVaultStandaloneButton() {
 
   if (!uploader || !hint || !tableBody) return;
 
-  if (typeof documentVaultState.standaloneOpen !== "boolean") {
-    documentVaultState.standaloneOpen = false;
-  }
-
   const canUploadStandalone = !!customerId && role !== "co-owner";
 
   if (standaloneBtn) {
-    const wrap = standaloneBtn.parentElement;
-    if (wrap) {
-      wrap.classList.toggle("hidden", !canUploadStandalone);
-    }
-
-    standaloneBtn.textContent = documentVaultState.standaloneOpen
-      ? "Close Other Document"
-      : "Add Other Document";
-
-    standaloneBtn.onclick = () => {
-      documentVaultState.standaloneOpen = !documentVaultState.standaloneOpen;
-
-      uploader.classList.toggle(
-        "hidden",
-        !canUploadStandalone || !documentVaultState.standaloneOpen
-      );
-
-      standaloneBtn.textContent = documentVaultState.standaloneOpen
-        ? "Close Other Document"
-        : "Add Other Document";
-
-      if (documentVaultState.standaloneOpen) {
-        setDocumentVaultStatus(
-          "Use this only for rare standalone customer documents.",
-          false
-        );
-      } else {
-        clearDocumentVaultDraft(false);
-      }
-    };
+    standaloneBtn.classList.toggle("hidden", !canUploadStandalone);
+    standaloneBtn.textContent = "+ Other Document";
+    standaloneBtn.onclick = () => openDocVaultPopup();
   }
 
-  uploader.classList.toggle(
-    "hidden",
-    !canUploadStandalone || !documentVaultState.standaloneOpen
-  );
+  uploader.classList.add("hidden");
 
   if (!customerId) {
     hint.textContent = "Select a customer to view saved supporting documents.";
@@ -4520,7 +4578,7 @@ function ensureDocVaultStandaloneButton() {
       documentVaultState.currentCustomerId = null;
       documentVaultState.documents = [];
       documentVaultState.standaloneOpen = false;
-      clearDocumentVaultDraft(false);
+      closeDocVaultPopup();
     }
 
     return;
@@ -4530,8 +4588,7 @@ function ensureDocVaultStandaloneButton() {
 
   if (documentVaultState.currentCustomerId !== customerId) {
     documentVaultState.currentCustomerId = customerId;
-    documentVaultState.standaloneOpen = false;
-    clearDocumentVaultDraft(false);
+    closeDocVaultPopup();
     loadCustomerDocuments();
   }
 }
@@ -4595,7 +4652,7 @@ function ensureDocVaultStandaloneButton() {
     if (categoryInput) categoryInput.value = "invoice";
 
     if (resetStatus) {
-      setDocumentVaultStatus("Choose an image or paste a screenshot. Max 6MB.", false);
+      setDocumentVaultStatus("Choose an image. Max 6MB.", false);
     }
   }
 
@@ -4622,7 +4679,7 @@ function ensureDocVaultStandaloneButton() {
     }
 
     if (!documentVaultState.file) {
-      alert("Choose or paste an image first.");
+      alert("Choose an image first.");
       return;
     }
 
@@ -4687,8 +4744,9 @@ function ensureDocVaultStandaloneButton() {
       }
 
       clearDocumentVaultDraft(true);
-      await loadCustomerDocuments();
-      setDocumentVaultStatus("Document saved successfully.", false);
+await loadCustomerDocuments();
+setDocumentVaultStatus("Document saved successfully.", false);
+closeDocVaultPopup();
     } catch (error) {
       setDocumentVaultStatus(docVaultEscapeHtml(error.message || "Could not save document."), true);
     } finally {
