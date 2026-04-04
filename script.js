@@ -1347,18 +1347,22 @@ function renderCustomerContacts(customer) {
   }
 
     function clearInvoiceForm() {
-    el.invoiceNumber.value = "";
-    el.invoiceDate.value = "";
-    el.poNumber.value = "";
-    el.referenceInfo.value = "";
-    el.lineItemsContainer.innerHTML = "";
-    el.invoiceTotalAmount.textContent = formatPeso(0);
+  el.invoiceNumber.value = "";
+  el.invoiceDate.value = "";
+  el.poNumber.value = "";
+  el.referenceInfo.value = "";
+  el.lineItemsContainer.innerHTML = "";
+  el.invoiceTotalAmount.textContent = formatPeso(0);
 
-    const breakdownBox = document.getElementById("invoiceDiscountBreakdown");
-    if (breakdownBox) {
-      breakdownBox.innerHTML = "";
-    }
+  if (typeof clearInvoiceDocumentDraft === "function") {
+    clearInvoiceDocumentDraft(true);
   }
+
+  const breakdownBox = document.getElementById("invoiceDiscountBreakdown");
+  if (breakdownBox) {
+    breakdownBox.innerHTML = "";
+  }
+}
   function canUseInvoiceDiscount(customer) {
     return !!customer?.discount_authorized;
   }
@@ -1692,7 +1696,7 @@ function renderCustomerContacts(customer) {
     }));
 
     const total = editorState.totalAmount;
-
+let invoiceDocumentResult = null;
     if (state.editingInvoiceId) {
       if (!canEditInvoice()) return;
 
@@ -1755,6 +1759,11 @@ function renderCustomerContacts(customer) {
         discount_total_amount: editorState.discountTotalAmount,
         total_amount: total
       });
+      invoiceDocumentResult = await saveLinkedInvoiceDocument(
+  state.editingInvoiceId,
+  customer.id,
+  invoiceNumber
+);
     } else {
       if (!canCreateInvoice()) return;
 
@@ -1793,12 +1802,27 @@ function renderCustomerContacts(customer) {
       if (itemError) return alert(itemError.message);
 
       await addLog("Create", "Invoice", invoiceNumber, "", null, data);
+      invoiceDocumentResult = await saveLinkedInvoiceDocument(
+  data.id,
+  customer.id,
+  invoiceNumber
+);
     }
 
     closeModal(el.invoiceModal);
     state.editingInvoiceId = null;
         await refreshSelectedCustomerOnly();
-    alert("Invoice saved successfully.");
+    let invoiceSaveMessage = "Invoice saved successfully.";
+
+if (invoiceDocumentResult && !invoiceDocumentResult.skipped) {
+  if (invoiceDocumentResult.ok) {
+    invoiceSaveMessage += "\n\nInvoice document also saved to Document Vault.";
+  } else {
+    invoiceSaveMessage += `\n\nInvoice saved, but the document could not be saved:\n${invoiceDocumentResult.message}`;
+  }
+}
+
+alert(invoiceSaveMessage);
   }
 
   function viewInvoice(invoiceId) {
@@ -4600,6 +4624,231 @@ function formatCompactPeso(value) {
       day: "2-digit",
       hour: "2-digit",
       minute: "2-digit"
+        // ===== Invoice Document Upload =====
+  const invoiceDocumentDraft = {
+    file: null,
+    source: "upload",
+    previewUrl: ""
+  };
+
+  initInvoiceDocumentUpload();
+
+  function initInvoiceDocumentUpload() {
+    const fileInput = document.getElementById("invoiceDocumentFileInput");
+    const pasteZone = document.getElementById("invoiceDocumentPasteZone");
+    const clearBtn = document.getElementById("clearInvoiceDocumentBtn");
+
+    if (!fileInput || !pasteZone || !clearBtn) {
+      return;
+    }
+
+    fileInput.addEventListener("change", (event) => {
+      const file = event.target.files?.[0];
+      if (!file) return;
+
+      try {
+        applyInvoiceDocumentFile(file, "upload");
+      } catch (error) {
+        setInvoiceDocumentStatus(error.message || "Could not read file.", true);
+        fileInput.value = "";
+      }
+    });
+
+    pasteZone.addEventListener("click", () => pasteZone.focus());
+
+    pasteZone.addEventListener("paste", (event) => {
+      const items = [...(event.clipboardData?.items || [])];
+      const imageItem = items.find((item) => item.type.startsWith("image/"));
+
+      if (!imageItem) {
+        setInvoiceDocumentStatus("No image found in clipboard. Copy a snippet first, then press Ctrl + V here.", true);
+        return;
+      }
+
+      event.preventDefault();
+
+      const blob = imageItem.getAsFile();
+      if (!blob) {
+        setInvoiceDocumentStatus("Clipboard image could not be read. Try copying it again.", true);
+        return;
+      }
+
+      try {
+        const extension = invoiceDocumentExtFromMime(blob.type || "image/png");
+        const pastedFile = new File(
+          [blob],
+          `invoice-document-${Date.now()}.${extension}`,
+          { type: blob.type || "image/png" }
+        );
+
+        applyInvoiceDocumentFile(pastedFile, "paste");
+      } catch (error) {
+        setInvoiceDocumentStatus(error.message || "Could not use pasted image.", true);
+      }
+    });
+
+    clearBtn.addEventListener("click", () => clearInvoiceDocumentDraft(true));
+  }
+
+  function applyInvoiceDocumentFile(file, source) {
+    if (!file.type.startsWith("image/")) {
+      throw new Error("Please use an image file only.");
+    }
+
+    if (file.size > 6 * 1024 * 1024) {
+      throw new Error("Please keep the image under 6MB.");
+    }
+
+    if (invoiceDocumentDraft.previewUrl) {
+      URL.revokeObjectURL(invoiceDocumentDraft.previewUrl);
+    }
+
+    invoiceDocumentDraft.file = file;
+    invoiceDocumentDraft.source = source || "upload";
+    invoiceDocumentDraft.previewUrl = URL.createObjectURL(file);
+
+    const previewWrap = document.getElementById("invoiceDocumentPreviewWrap");
+    const previewImg = document.getElementById("invoiceDocumentPreviewImg");
+    const titleInput = document.getElementById("invoiceDocumentTitle");
+
+    if (previewWrap && previewImg) {
+      previewImg.src = invoiceDocumentDraft.previewUrl;
+      previewWrap.classList.remove("hidden");
+    }
+
+    if (titleInput && !titleInput.value.trim()) {
+      titleInput.value = `Invoice ${invoiceDocumentTitleFromFile(file.name)}`;
+    }
+
+    setInvoiceDocumentStatus("Document ready. It will be saved to Document Vault after the invoice is saved.", false);
+  }
+
+  function clearInvoiceDocumentDraft(resetStatus) {
+    const fileInput = document.getElementById("invoiceDocumentFileInput");
+    const previewWrap = document.getElementById("invoiceDocumentPreviewWrap");
+    const previewImg = document.getElementById("invoiceDocumentPreviewImg");
+    const titleInput = document.getElementById("invoiceDocumentTitle");
+    const notesInput = document.getElementById("invoiceDocumentNotes");
+
+    if (invoiceDocumentDraft.previewUrl) {
+      URL.revokeObjectURL(invoiceDocumentDraft.previewUrl);
+    }
+
+    invoiceDocumentDraft.file = null;
+    invoiceDocumentDraft.source = "upload";
+    invoiceDocumentDraft.previewUrl = "";
+
+    if (fileInput) fileInput.value = "";
+    if (previewImg) previewImg.src = "";
+    if (previewWrap) previewWrap.classList.add("hidden");
+    if (titleInput) titleInput.value = "";
+    if (notesInput) notesInput.value = "";
+
+    if (resetStatus) {
+      setInvoiceDocumentStatus("Optional. This image will be saved to Document Vault after the invoice is saved.", false);
+    }
+  }
+
+  function setInvoiceDocumentStatus(message, isError) {
+    const statusBox = document.getElementById("invoiceDocumentStatus");
+    if (!statusBox) return;
+
+    statusBox.textContent = message;
+    statusBox.classList.toggle("doc-status-error", !!isError);
+    statusBox.classList.toggle("doc-status-success", !isError);
+  }
+
+  async function saveLinkedInvoiceDocument(invoiceId, customerId, invoiceNumber) {
+    if (!invoiceDocumentDraft.file) {
+      return { ok: true, skipped: true };
+    }
+
+    const titleInput = document.getElementById("invoiceDocumentTitle");
+    const notesInput = document.getElementById("invoiceDocumentNotes");
+
+    const title =
+      titleInput?.value?.trim() ||
+      `Invoice ${invoiceNumber}`;
+    const notes = notesInput?.value?.trim() || null;
+
+    const safeFileName = invoiceDocumentSafeFileName(invoiceDocumentDraft.file.name);
+    const storagePath = `${customerId}/${new Date().toISOString().slice(0, 10)}/${crypto.randomUUID()}-${safeFileName}`;
+
+    try {
+      const { error: uploadError } = await supabaseClient.storage
+        .from("customer-documents")
+        .upload(storagePath, invoiceDocumentDraft.file, {
+          cacheControl: "3600",
+          upsert: false,
+          contentType: invoiceDocumentDraft.file.type || "image/png"
+        });
+
+      if (uploadError) {
+        return {
+          ok: false,
+          message: uploadError.message || "Storage upload failed."
+        };
+      }
+
+      const { error: insertError } = await supabaseClient
+        .from("customer_documents")
+        .insert({
+          customer_id: customerId,
+          invoice_id: invoiceId,
+          payment_id: null,
+          category: "invoice",
+          title,
+          reference_code: invoiceNumber,
+          notes,
+          file_name: invoiceDocumentDraft.file.name,
+          mime_type: invoiceDocumentDraft.file.type || "image/png",
+          file_size: invoiceDocumentDraft.file.size,
+          storage_path: storagePath,
+          source: invoiceDocumentDraft.source,
+          uploaded_by: state.currentProfile.id,
+          origin_screen: "invoice_modal"
+        });
+
+      if (insertError) {
+        await supabaseClient.storage.from("customer-documents").remove([storagePath]);
+        return {
+          ok: false,
+          message: insertError.message || "Database save failed."
+        };
+      }
+
+      return { ok: true, skipped: false };
+    } catch (error) {
+      return {
+        ok: false,
+        message: error.message || "Unexpected document save failure."
+      };
+    }
+  }
+
+  function invoiceDocumentTitleFromFile(fileName) {
+    return String(fileName || "document")
+      .replace(/\.[^.]+$/, "")
+      .replace(/[-_]+/g, " ")
+      .trim() || "document";
+  }
+
+  function invoiceDocumentSafeFileName(fileName) {
+    const cleaned = String(fileName || "invoice-document.png")
+      .trim()
+      .replace(/\s+/g, "-")
+      .replace(/[^a-zA-Z0-9._-]/g, "");
+
+    return cleaned || `invoice-document-${Date.now()}.png`;
+  }
+
+  function invoiceDocumentExtFromMime(mimeType) {
+    if (mimeType === "image/jpeg") return "jpg";
+    if (mimeType === "image/webp") return "webp";
+    if (mimeType === "image/gif") return "gif";
+    return "png";
+  }
+  // ===== End Invoice Document Upload =====
     });
   }
 
