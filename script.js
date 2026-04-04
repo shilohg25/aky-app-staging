@@ -3,8 +3,11 @@
 const { supabaseClient, ACCOUNT_ADMIN_FUNCTION_URL, ROLE_PERMISSIONS, state } = window;
   
   const el = mapElements();
+
+window.addEventListener("load", () => {
   bindEvents();
   bootstrap();
+});
 
   function mapElements() {
     const byId = (id) => document.getElementById(id);
