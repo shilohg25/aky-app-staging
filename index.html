@@ -725,7 +725,32 @@
             <option value="Online">Online</option>
           </select>
         </div>
+<div class="panel soft-panel ai-assist-panel">
+  <div class="panel-row">
+    <h4 class="panel-title small-title">AI Payment Proof Assist</h4>
+    <label class="ai-upload-btn">
+      <input id="paymentAiFileInput" type="file" accept="image/*" hidden />
+      Choose image
+    </label>
+  </div>
 
+  <div id="paymentAiPasteZone" class="ai-paste-zone" tabindex="0">
+    Click here, then press Ctrl + V to paste a cheque or online payment screenshot.
+  </div>
+
+  <div class="btn-row" style="margin-top:12px;">
+    <button id="paymentAiAnalyzeBtn" class="btn btn-secondary" type="button">Analyze with AI</button>
+    <button id="paymentAiClearBtn" class="btn btn-light" type="button">Clear</button>
+  </div>
+
+  <div id="paymentAiPreviewWrap" class="ai-preview-wrap hidden">
+    <img id="paymentAiPreviewImg" class="ai-preview-img" alt="Payment proof preview" />
+  </div>
+
+  <div id="paymentAiStatus" class="info-box" style="margin-top:12px;">
+    Nothing uploaded yet.
+  </div>
+</div>
         <div class="field hidden" id="chequeNumberWrap">
           <label for="chequeNumberInput">Cheque Number *</label>
           <input id="chequeNumberInput" type="text" />
