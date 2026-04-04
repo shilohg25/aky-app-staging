@@ -770,52 +770,42 @@
 </div>
 
 <div id="paymentTypeModal" class="modal">
-<div id="paymentViewModal" class="modal">
-  <div class="modal-content large-modal">
+  <div class="modal-content medium-modal">
     <div class="modal-header">
-      <h3>Payment Details</h3>
-      <button id="closePaymentViewModalBtn" class="icon-btn" type="button">&times;</button>
+      <h3>Make Payment</h3>
+      <button id="closePaymentTypeModalBtn" class="icon-btn" type="button">&times;</button>
     </div>
-    <div id="paymentViewContent"></div>
+    <div class="payment-choice-grid">
+      <button id="payByInvoiceBtn" class="payment-choice-btn" type="button">
+        <strong>Pay by Invoice</strong>
+        <span>Choose one or more open invoices and pay their current balances.</span>
+      </button>
+      <button id="partialPaymentBtn" class="payment-choice-btn" type="button">
+        <strong>Allocate Payment</strong>
+        <span>Enter one payment amount and auto-allocate it to open invoices oldest first.</span>
+      </button>
+    </div>
   </div>
 </div>
-  <div id="paymentTypeModal" class="modal">
-    <div class="modal-content medium-modal">
-      <div class="modal-header">
-        <h3>Make Payment</h3>
-        <button id="closePaymentTypeModalBtn" class="icon-btn" type="button">&times;</button>
-      </div>
-      <div class="payment-choice-grid">
-        <button id="payByInvoiceBtn" class="payment-choice-btn" type="button">
-          <strong>Pay by Invoice</strong>
-          <span>Choose one or more open invoices and pay their current balances.</span>
-        </button>
-        <button id="partialPaymentBtn" class="payment-choice-btn" type="button">
-  <strong>Allocate Payment</strong>
-  <span>Enter one payment amount and auto-allocate it to open invoices oldest first.</span>
-</button>
+
+<div id="invoiceSelectionModal" class="modal">
+  <div class="modal-content large-modal">
+    <div class="modal-header">
+      <h3>Pay by Invoice</h3>
+      <button id="closeInvoiceSelectionModalBtn" class="icon-btn" type="button">&times;</button>
+    </div>
+    <div id="invoiceSelectionList" class="selection-list"></div>
+    <div class="modal-footer between">
+      <div class="total-box">Selected Total: <strong id="selectedInvoicesTotal">₱0</strong></div>
+      <div class="btn-row">
+        <button id="cancelInvoiceSelectionBtn" class="btn btn-light" type="button">Cancel</button>
+        <button id="proceedInvoiceSelectionBtn" class="btn btn-primary" type="button">Proceed</button>
       </div>
     </div>
   </div>
+</div>
 
-  <div id="invoiceSelectionModal" class="modal">
-    <div class="modal-content large-modal">
-      <div class="modal-header">
-        <h3>Pay by Invoice</h3>
-        <button id="closeInvoiceSelectionModalBtn" class="icon-btn" type="button">&times;</button>
-      </div>
-      <div id="invoiceSelectionList" class="selection-list"></div>
-      <div class="modal-footer between">
-        <div class="total-box">Selected Total: <strong id="selectedInvoicesTotal">₱0</strong></div>
-        <div class="btn-row">
-          <button id="cancelInvoiceSelectionBtn" class="btn btn-light" type="button">Cancel</button>
-          <button id="proceedInvoiceSelectionBtn" class="btn btn-primary" type="button">Proceed</button>
-        </div>
-      </div>
-    </div>
-  </div>
-
-  <div id="partialPaymentModal" class="modal">
+<div id="partialPaymentModal" class="modal">
   <div class="modal-content medium-modal">
     <div class="modal-header">
       <h3>Allocate Payment</h3>
@@ -841,132 +831,105 @@
   </div>
 </div>
 
-  <div id="paymentMethodModal" class="modal">
-    <div class="modal-content medium-modal">
-      <div class="modal-header">
-        <h3>Payment Details</h3>
-        <button id="closePaymentMethodModalBtn" class="icon-btn" type="button">&times;</button>
+<div id="paymentMethodModal" class="modal">
+  <div class="modal-content medium-modal">
+    <div class="modal-header">
+      <h3>Payment Details</h3>
+      <button id="closePaymentMethodModalBtn" class="icon-btn" type="button">&times;</button>
+    </div>
+
+    <div class="form-grid one-col">
+      <div class="field">
+        <label for="paymentMethodSelect">Payment Method *</label>
+        <select id="paymentMethodSelect">
+          <option value="">Select</option>
+          <option value="Cash">Cash</option>
+          <option value="Cheque">Cheque</option>
+          <option value="Online">Online</option>
+        </select>
       </div>
 
-      <div class="form-grid one-col">
-                <div class="field">
-          <label for="paymentMethodSelect">Payment Method *</label>
-          <select id="paymentMethodSelect">
-            <option value="">Select</option>
-            <option value="Cash">Cash</option>
-            <option value="Cheque">Cheque</option>
-            <option value="Online">Online</option>
-          </select>
+      <div class="panel soft-panel">
+        <div class="panel-row">
+          <h4 class="panel-title small-title">Payment Proof</h4>
         </div>
-        <div class="panel soft-panel">
-          <div class="panel-row">
-            <h4 class="panel-title small-title">Payment Proof</h4>
-          </div>
 
-          <div class="form-grid one-col" style="margin-top:12px;">
-            <div class="field">
-              <label for="paymentDocumentFileInput">Upload Payment Proof Image</label>
-              <input id="paymentDocumentFileInput" type="file" accept="image/*" />
-            </div>
-          </div>
-
-          <div id="paymentDocumentPreviewWrap" class="doc-preview-wrap hidden">
-            <img id="paymentDocumentPreviewImg" class="doc-preview-img" alt="Payment proof preview" />
-          </div>
-
-          <div class="btn-row" style="margin-top:12px;">
-            <button id="clearPaymentDocumentBtn" class="btn btn-light" type="button">Remove Document</button>
-          </div>
-
-          <div id="paymentDocumentStatus" class="info-box" style="margin-top:12px;">
-            Optional. Upload one payment proof image. It will be saved to Document Vault after the payment is saved.
+        <div class="form-grid one-col" style="margin-top:12px;">
+          <div class="field">
+            <label for="paymentDocumentFileInput">Upload Payment Proof Image</label>
+            <input id="paymentDocumentFileInput" type="file" accept="image/*" />
           </div>
         </div>
 
-<div class="panel soft-panel ai-assist-panel owner-access hidden">
-  <div class="panel-row">
-    <h4 class="panel-title small-title">AI Payment Proof Assist</h4>
-    <label class="ai-upload-btn">
-      <input id="paymentAiFileInput" type="file" accept="image/*" hidden />
-      Choose image
-    </label>
-  </div>
-
-  <div id="paymentAiPasteZone" class="ai-paste-zone" tabindex="0">
-    Click here, then press Ctrl + V to paste a cheque or online payment screenshot.
-  </div>
-
-  <div class="btn-row" style="margin-top:12px;">
-    <button id="paymentAiAnalyzeBtn" class="btn btn-secondary" type="button">Analyze with AI</button>
-    <button id="paymentAiClearBtn" class="btn btn-light" type="button">Clear</button>
-  </div>
-
-  <div id="paymentAiPreviewWrap" class="ai-preview-wrap hidden">
-    <img id="paymentAiPreviewImg" class="ai-preview-img" alt="Payment proof preview" />
-  </div>
-
-  <div id="paymentAiStatus" class="info-box" style="margin-top:12px;">
-    Nothing uploaded yet.
-  </div>
-</div>
-        <div class="field hidden" id="chequeNumberWrap">
-          <label for="chequeNumberInput">Cheque Number *</label>
-          <input id="chequeNumberInput" type="text" />
+        <div id="paymentDocumentPreviewWrap" class="doc-preview-wrap hidden">
+          <img id="paymentDocumentPreviewImg" class="doc-preview-img" alt="Payment proof preview" />
         </div>
 
-        <div class="field hidden" id="chequeDateWrap">
-          <label for="chequeDateInput">Cheque Date *</label>
-          <input id="chequeDateInput" type="date" />
+        <div class="btn-row" style="margin-top:12px;">
+          <button id="clearPaymentDocumentBtn" class="btn btn-light" type="button">Remove Document</button>
         </div>
 
-        <div class="field hidden" id="chequePostDatedWrap">
+        <div id="paymentDocumentStatus" class="info-box" style="margin-top:12px;">
+          Optional. Upload one payment proof image. It will be saved to Document Vault after the payment is saved.
+        </div>
+      </div>
+
+      <div class="field hidden" id="chequeNumberWrap">
+        <label for="chequeNumberInput">Cheque Number *</label>
+        <input id="chequeNumberInput" type="text" />
+      </div>
+
+      <div class="field hidden" id="chequeDateWrap">
+        <label for="chequeDateInput">Cheque Date *</label>
+        <input id="chequeDateInput" type="date" />
+      </div>
+
+      <div class="field hidden" id="chequePostDatedWrap">
+        <label class="checkbox-row">
+          <input id="chequePostDatedInput" type="checkbox" />
+          This cheque is post-dated
+        </label>
+      </div>
+
+      <div class="field hidden" id="onlineReferenceWrap">
+        <label for="onlineReferenceInput">Online Reference Number *</label>
+        <input id="onlineReferenceInput" type="text" />
+      </div>
+
+      <div class="field hidden" id="onlinePlatformWrap">
+        <label for="onlinePlatformInput">Platform / Bank Name *</label>
+        <input id="onlinePlatformInput" type="text" />
+      </div>
+
+      <div class="field hidden" id="cashBankAccountWrap">
+        <label for="cashBankAccountInput">Deposit Bank Account Number *</label>
+        <input id="cashBankAccountInput" type="text" />
+      </div>
+
+      <div id="withholdingTaxWrap" class="panel soft-panel">
+        <div class="panel-row">
+          <h4 class="panel-title small-title">Withholding Tax</h4>
           <label class="checkbox-row">
-            <input id="chequePostDatedInput" type="checkbox" />
-            This cheque is post-dated
+            <input id="withholdingTaxAppliedInput" type="checkbox" />
+            Apply Withholding Tax
           </label>
         </div>
 
-        <div class="field hidden" id="onlineReferenceWrap">
-          <label for="onlineReferenceInput">Online Reference Number *</label>
-          <input id="onlineReferenceInput" type="text" />
+        <div id="withholdingTaxPreviewBox" class="info-box" style="margin-top:12px;">
+          Current rate: <strong id="withholdingTaxRateLabel">1%</strong><br>
+          Formula: <strong>Gross / 1.12 × Rate</strong><br>
+          Gross settles the invoice. Net is stored for audit and reporting.
         </div>
-
-        <div class="field hidden" id="onlinePlatformWrap">
-          <label for="onlinePlatformInput">Platform / Bank Name *</label>
-          <input id="onlinePlatformInput" type="text" />
-        </div>
-
-        <div class="field hidden" id="cashBankAccountWrap">
-  <label for="cashBankAccountInput">Deposit Bank Account Number *</label>
-  <input id="cashBankAccountInput" type="text" />
-</div>
-
-<div id="withholdingTaxWrap" class="panel soft-panel">
-  <div class="panel-row">
-    <h4 class="panel-title small-title">Withholding Tax</h4>
-    <label class="checkbox-row">
-      <input id="withholdingTaxAppliedInput" type="checkbox" />
-      Apply Withholding Tax
-    </label>
-  </div>
-
-  <div id="withholdingTaxPreviewBox" class="info-box" style="margin-top:12px;">
-    Current rate: <strong id="withholdingTaxRateLabel">1%</strong><br>
-    Formula: <strong>Gross / 1.12 × Rate</strong><br>
-    Gross settles the invoice. Net is stored for audit and reporting.
-  </div>
-</div>
-
-<div id="paymentReviewBox" class="info-box"></div>
       </div>
 
-      <div class="modal-footer">
-        <button id="savePaymentBtn" class="btn btn-primary" type="button">Finish Payment</button>
-      </div>
+      <div id="paymentReviewBox" class="info-box"></div>
+    </div>
+
+    <div class="modal-footer">
+      <button id="savePaymentBtn" class="btn btn-primary" type="button">Finish Payment</button>
     </div>
   </div>
-
-  <div id="changePasswordModal" class="modal">
+</div>
     <div class="modal-content medium-modal">
       <div class="modal-header">
         <h3 id="changePasswordTitle">Change Password</h3>
