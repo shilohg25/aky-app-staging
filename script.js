@@ -822,10 +822,15 @@ el.generateSoaBtn.addEventListener("click", generateSoa);
   function renderCurrentCustomerDashboard() {
     const customer = getSelectedCustomer();
     if (!customer) {
-      el.welcomePanel.classList.remove("hidden");
-      el.customerDashboard.classList.add("hidden");
-      return;
-    }
+  el.welcomePanel.classList.remove("hidden");
+  el.customerDashboard.classList.add("hidden");
+
+  if (typeof syncDocumentVaultCustomer === "function") {
+    syncDocumentVaultCustomer();
+  }
+
+  return;
+}
 
     el.welcomePanel.classList.add("hidden");
     el.customerDashboard.classList.remove("hidden");
@@ -855,11 +860,19 @@ el.generateSoaBtn.addEventListener("click", generateSoa);
     renderAlertBox(customer);
 
     el.editCustomerBtn.classList.toggle("hidden", !canEditCustomer());
-    el.deleteCustomerBtn.classList.toggle("hidden", !canDeleteCustomer());
-    el.createInvoiceBtn.classList.toggle("hidden", !canCreateInvoice());
-    el.makePaymentBtn.classList.toggle("hidden", !canCreatePayment());
-    el.createSOABtn.classList.toggle("hidden", !canGenerateSoa());
-  }
+el.deleteCustomerBtn.classList.toggle("hidden", !canDeleteCustomer());
+el.createInvoiceBtn.classList.toggle("hidden", !canCreateInvoice());
+el.makePaymentBtn.classList.toggle("hidden", !canCreatePayment());
+el.createSOABtn.classList.toggle("hidden", !canGenerateSoa());
+
+if (typeof syncDocumentVaultCustomer === "function") {
+  syncDocumentVaultCustomer();
+}
+
+if (typeof loadCustomerDocuments === "function") {
+  loadCustomerDocuments();
+}
+}
 
 function renderCustomerContacts(customer) {
   const primary = {
