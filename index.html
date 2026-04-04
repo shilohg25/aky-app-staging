@@ -552,6 +552,32 @@
           <input id="referenceInfo" type="text" />
         </div>
       </div>
+      <div class="panel soft-panel ai-assist-panel">
+  <div class="panel-row">
+    <h4 class="panel-title small-title">AI Invoice Assist</h4>
+    <label class="ai-upload-btn">
+      <input id="invoiceAiFileInput" type="file" accept="image/*" hidden />
+      Choose image
+    </label>
+  </div>
+
+  <div id="invoiceAiPasteZone" class="ai-paste-zone" tabindex="0">
+    Click here, then press Ctrl + V to paste an invoice screenshot or snippet.
+  </div>
+
+  <div class="btn-row" style="margin-top:12px;">
+    <button id="invoiceAiAnalyzeBtn" class="btn btn-secondary" type="button">Analyze with AI</button>
+    <button id="invoiceAiClearBtn" class="btn btn-light" type="button">Clear</button>
+  </div>
+
+  <div id="invoiceAiPreviewWrap" class="ai-preview-wrap hidden">
+    <img id="invoiceAiPreviewImg" class="ai-preview-img" alt="Invoice preview" />
+  </div>
+
+  <div id="invoiceAiStatus" class="info-box" style="margin-top:12px;">
+    Nothing uploaded yet.
+  </div>
+</div>
 <div id="invoiceDiscountWrap" class="panel soft-panel hidden">
   <div class="panel-row">
     <h4 class="panel-title small-title">Invoice Discount</h4>
