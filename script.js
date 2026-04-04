@@ -2113,64 +2113,92 @@ async function saveInvoice() {
 }
 
   function viewInvoice(invoiceId) {
-    const customer = getSelectedCustomer();
-    if (!customer) return;
-    const invoice = customer.invoices.find((inv) => inv.id === invoiceId);
-    if (!invoice) return;
-    const tbv = state.tbvs.find((t) => t.invoice_id === invoice.id && t.status === "PENDING");
-        const itemsHtml = (invoice.items || []).map((item) => `
-      <tr>
-        <td>${escapeHtml(item.product_name || "-")}</td>
-        <td>${formatNumber(item.qty)}</td>
-        <td>${formatPeso(item.unit_price)}</td>
-        <td>${formatPeso(item.discount_per_qty || 0)}</td>
-        <td>${formatPeso(item.line_total)}</td>
-      </tr>
-    `).join("");
+  const customer = getSelectedCustomer();
+  if (!customer) return;
 
-    let actionButtons = "";
-        if (canEditInvoiceRecord(invoice)) {
-      actionButtons += `<button class="btn btn-light" id="invoiceViewEditBtn">Edit Invoice</button>`;
-    }
-    if (canRequestTbv() && !tbv) actionButtons += `<button class="btn btn-danger" id="invoiceViewTbvBtn">TBV</button>`;
+  const invoice = customer.invoices.find((inv) => inv.id === invoiceId);
+  if (!invoice) return;
 
-    el.invoiceViewContent.innerHTML = `
-      <div class="invoice-meta-grid">
-        <div class="invoice-meta-card"><span>Invoice #</span><strong>${escapeHtml(invoice.invoice_number)}</strong></div>
-        <div class="invoice-meta-card"><span>Date</span><strong>${escapeHtml(invoice.invoice_date)}</strong></div>
-        <div class="invoice-meta-card"><span>PO #</span><strong>${escapeHtml(invoice.po_number || "-")}</strong></div>
-        <div class="invoice-meta-card"><span>Reference</span><strong>${escapeHtml(invoice.reference_info || "-")}</strong></div>
-      </div>
-            <div class="table-wrap">
-        <table class="records-table">
-          <thead><tr><th>Product Name</th><th>Quantity</th><th>Price</th><th>Discount / Qty</th><th>Line Total</th></tr></thead>
-          <tbody>${itemsHtml || `<tr><td colspan="5" class="muted">No line items.</td></tr>`}</tbody>
-        </table>
-      </div>
-            ${Number(invoice.discount_total_amount || 0) > 0 ? `
-        <div class="info-box" style="margin-top:16px;">
-          Subtotal: <strong>${formatPeso(invoice.subtotal_amount || invoice.total)}</strong><br>
-          Line Discounts: <strong>${formatPeso(invoice.line_discount_total || 0)}</strong><br>
-          Fixed Invoice Discount: <strong>${formatPeso(invoice.invoice_discount_amount || 0)}</strong><br>
-          Total Discount: <strong>${formatPeso(invoice.discount_total_amount || 0)}</strong><br>
-          Discount Mode: <strong>${escapeHtml(invoice.discount_mode || "none")}</strong><br>
-          Reason: <strong>${escapeHtml(invoice.discount_reason || "-")}</strong>
-        </div>
-      ` : ""}
-      <div class="summary-grid" style="margin-top:16px;">
-        <div class="panel summary-card"><span class="summary-label">Invoice Total</span><strong>${formatPeso(invoice.total)}</strong></div>
-        <div class="panel summary-card"><span class="summary-label">Paid</span><strong>${formatPeso(invoice.paidAmount)}</strong></div>
-        <div class="panel summary-card"><span class="summary-label">Balance</span><strong>${formatPeso(invoice.balance)}</strong></div>
-        <div class="panel summary-card"><span class="summary-label">Status</span><strong>${escapeHtml(invoice.status)}</strong></div>
-      </div>
-      ${tbv ? `<div class="alert-box" style="margin-top:16px;">TBV status: ${escapeHtml(tbv.status)} | Explanation: ${escapeHtml(tbv.explanation)}</div>` : ""}
-      <div class="btn-row" style="margin-top:16px;">${actionButtons}</div>
-    `;
+  const tbv = state.tbvs.find((t) => t.invoice_id === invoice.id && t.status === "PENDING");
 
-    openModal(el.invoiceViewModal);
-    document.getElementById("invoiceViewEditBtn")?.addEventListener("click", () => { closeModal(el.invoiceViewModal); openInvoiceModalForEdit(invoice.id); });
-    document.getElementById("invoiceViewTbvBtn")?.addEventListener("click", () => { closeModal(el.invoiceViewModal); openTbvModal(invoice.id); });
+  const itemsHtml = (invoice.items || []).map((item) => `
+    <tr>
+      <td>${escapeHtml(item.product_name || "-")}</td>
+      <td>${formatNumber(item.qty)}</td>
+      <td>${formatPeso(item.unit_price)}</td>
+      <td>${formatPeso(item.discount_per_qty || 0)}</td>
+      <td>${formatPeso(item.line_total)}</td>
+    </tr>
+  `).join("");
+
+  let actionButtons = "";
+
+  if (canEditInvoiceRecord(invoice)) {
+    actionButtons += `<button class="btn btn-light" id="invoiceViewEditBtn">Edit Invoice</button>`;
   }
+
+  if (canRequestTbv() && !tbv) {
+    actionButtons += `<button class="btn btn-danger" id="invoiceViewTbvBtn">TBV</button>`;
+  }
+
+  el.invoiceViewContent.innerHTML = `
+    <div class="invoice-meta-grid">
+      <div class="invoice-meta-card"><span>Invoice #</span><strong>${escapeHtml(invoice.invoice_number)}</strong></div>
+      <div class="invoice-meta-card"><span>Date</span><strong>${escapeHtml(invoice.invoice_date)}</strong></div>
+      <div class="invoice-meta-card"><span>PO #</span><strong>${escapeHtml(invoice.po_number || "-")}</strong></div>
+      <div class="invoice-meta-card"><span>Reference</span><strong>${escapeHtml(invoice.reference_info || "-")}</strong></div>
+    </div>
+
+    <div class="table-wrap">
+      <table class="records-table">
+        <thead>
+          <tr>
+            <th>Product Name</th>
+            <th>Quantity</th>
+            <th>Price</th>
+            <th>Discount / Qty</th>
+            <th>Line Total</th>
+          </tr>
+        </thead>
+        <tbody>${itemsHtml || `<tr><td colspan="5" class="muted">No line items.</td></tr>`}</tbody>
+      </table>
+    </div>
+
+    ${Number(invoice.discount_total_amount || 0) > 0 ? `
+      <div class="info-box" style="margin-top:16px;">
+        Subtotal: <strong>${formatPeso(invoice.subtotal_amount || invoice.total)}</strong><br>
+        Line Discounts: <strong>${formatPeso(invoice.line_discount_total || 0)}</strong><br>
+        Fixed Invoice Discount: <strong>${formatPeso(invoice.invoice_discount_amount || 0)}</strong><br>
+        Total Discount: <strong>${formatPeso(invoice.discount_total_amount || 0)}</strong><br>
+        Discount Mode: <strong>${escapeHtml(invoice.discount_mode || "none")}</strong><br>
+        Reason: <strong>${escapeHtml(invoice.discount_reason || "-")}</strong>
+      </div>
+    ` : ""}
+
+    <div class="summary-grid" style="margin-top:16px;">
+      <div class="panel summary-card"><span class="summary-label">Invoice Total</span><strong>${formatPeso(invoice.total)}</strong></div>
+      <div class="panel summary-card"><span class="summary-label">Paid</span><strong>${formatPeso(invoice.paidAmount)}</strong></div>
+      <div class="panel summary-card"><span class="summary-label">Balance</span><strong>${formatPeso(invoice.balance)}</strong></div>
+      <div class="panel summary-card"><span class="summary-label">Status</span><strong>${escapeHtml(invoice.status)}</strong></div>
+    </div>
+
+    ${tbv ? `<div class="alert-box" style="margin-top:16px;">TBV status: ${escapeHtml(tbv.status)} | Explanation: ${escapeHtml(tbv.explanation)}</div>` : ""}
+
+    <div class="btn-row" style="margin-top:16px;">${actionButtons}</div>
+  `;
+
+  openModal(el.invoiceViewModal);
+
+  document.getElementById("invoiceViewEditBtn")?.addEventListener("click", () => {
+    closeModal(el.invoiceViewModal);
+    openInvoiceModalForEdit(invoice.id);
+  });
+
+  document.getElementById("invoiceViewTbvBtn")?.addEventListener("click", () => {
+    closeModal(el.invoiceViewModal);
+    openTbvModal(invoice.id);
+  });
+}
 
   function renderInvoiceTable(customer) {
     el.invoiceTableBody.innerHTML = "";
