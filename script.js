@@ -179,8 +179,9 @@ paymentViewModal: byId("paymentViewModal"),
       reportInvoiceDateFrom: byId("reportInvoiceDateFrom"),
       reportInvoiceDateTo: byId("reportInvoiceDateTo"),
       reportPaidDateFrom: byId("reportPaidDateFrom"),
-      reportPaidDateTo: byId("reportPaidDateTo"),
+            reportPaidDateTo: byId("reportPaidDateTo"),
       reportStatusFilter: byId("reportStatusFilter"),
+      reportInvoiceNumberSort: byId("reportInvoiceNumberSort"),
       applyReportFilterBtn: byId("applyReportFilterBtn"),
       clearReportFilterBtn: byId("clearReportFilterBtn"),
       downloadReportBtn: byId("downloadReportBtn"),
@@ -3839,22 +3840,27 @@ el.execOutstanding.textContent = formatCompactPeso(
     el.reportCustomerFilter.innerHTML = `<option value="">All Customers</option>` + state.customers.slice().sort((a, b) => a.name.localeCompare(b.name)).map((c) => `<option value="${c.id}">${escapeHtml(c.name)}</option>`).join("");
   }
 
-  function getReportRows() {
-        return getActiveInvoices().map((invoice) => {
+    function getReportRows() {
+    const sortMode = el.reportInvoiceNumberSort?.value || "date_desc";
+    const invoiceNumberCollator = new Intl.Collator(undefined, { numeric: true, sensitivity: "base" });
+
+    return getActiveInvoices().map((invoice) => {
       const customer = state.customers.find((c) => c.id === invoice.customer_id);
-  const paymentDates = state.allocations
-  .filter((a) => a.invoice_id === invoice.id)
-  .map((a) => state.payments.find((p) => p.id === a.payment_id))
-  .filter((payment) => payment && isOperationallyCollectedPayment(payment))
-  .map((payment) => payment.payment_date)
-  .filter(Boolean)
-  .sort();
+      const paymentDates = state.allocations
+        .filter((a) => a.invoice_id === invoice.id)
+        .map((a) => state.payments.find((p) => p.id === a.payment_id))
+        .filter((payment) => payment && isOperationallyCollectedPayment(payment))
+        .map((payment) => payment.payment_date)
+        .filter(Boolean)
+        .sort();
+
       const latestPaidDate = paymentDates.length ? paymentDates[paymentDates.length - 1] : "";
+
       return {
         customerId: customer?.id || "",
         customerName: customer?.name || "-",
-        invoiceNumber: invoice.invoice_number,
-        invoiceDate: invoice.invoice_date,
+        invoiceNumber: invoice.invoice_number || "",
+        invoiceDate: invoice.invoice_date || "",
         poNumber: invoice.po_number || "",
         referenceInfo: invoice.reference_info || "",
         total: Number(invoice.total || 0),
@@ -3870,17 +3876,30 @@ el.execOutstanding.textContent = formatCompactPeso(
       const paidFrom = el.reportPaidDateFrom.value || null;
       const paidTo = el.reportPaidDateTo.value || null;
       const status = el.reportStatusFilter.value || "";
+
       if (customerId && row.customerId !== customerId) return false;
       if (invoiceFrom && row.invoiceDate < invoiceFrom) return false;
       if (invoiceTo && row.invoiceDate > invoiceTo) return false;
       if (status && row.status !== status) return false;
+
       if (paidFrom || paidTo) {
         if (!row.latestPaidDate) return false;
         if (paidFrom && row.latestPaidDate < paidFrom) return false;
         if (paidTo && row.latestPaidDate > paidTo) return false;
       }
+
       return true;
-    }).sort((a, b) => String(b.invoiceDate).localeCompare(String(a.invoiceDate)));
+    }).sort((a, b) => {
+      if (sortMode === "invoice_asc") {
+        return invoiceNumberCollator.compare(String(a.invoiceNumber || ""), String(b.invoiceNumber || ""));
+      }
+
+      if (sortMode === "invoice_desc") {
+        return invoiceNumberCollator.compare(String(b.invoiceNumber || ""), String(a.invoiceNumber || ""));
+      }
+
+      return String(b.invoiceDate || "").localeCompare(String(a.invoiceDate || ""));
+    });
   }
 
   function renderReportsView() {
@@ -3912,13 +3931,14 @@ el.execOutstanding.textContent = formatCompactPeso(
     });
   }
 
-  function clearReportFilters() {
+    function clearReportFilters() {
     el.reportCustomerFilter.value = "";
     el.reportInvoiceDateFrom.value = "";
     el.reportInvoiceDateTo.value = "";
     el.reportPaidDateFrom.value = "";
     el.reportPaidDateTo.value = "";
     el.reportStatusFilter.value = "";
+    if (el.reportInvoiceNumberSort) el.reportInvoiceNumberSort.value = "date_desc";
     renderReportsView();
   }
 
