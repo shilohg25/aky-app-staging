@@ -303,7 +303,24 @@ el.closePaymentViewModalBtn?.addEventListener("click", () => closeModal(el.payme
       renderPaymentReviewBox();
     });
     el.withholdingTaxAppliedInput?.addEventListener("change", renderWithholdingTaxUi);
-    el.savePaymentBtn.addEventListener("click", savePayment);
+    el.savePaymentBtn.addEventListener("click", async () => {
+  const btn = el.savePaymentBtn;
+  if (!btn || btn.dataset.busy === "1") return;
+
+  const originalText = btn.textContent || "Finish Payment";
+
+  btn.dataset.busy = "1";
+  btn.disabled = true;
+  btn.textContent = "Saving...";
+
+  try {
+    await savePayment();
+  } finally {
+    btn.dataset.busy = "0";
+    btn.disabled = false;
+    btn.textContent = originalText;
+  }
+});
 
     el.applyExecFilterBtn.addEventListener("click", renderExecutiveView);
     el.clearExecFilterBtn.addEventListener("click", () => {
