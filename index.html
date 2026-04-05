@@ -406,13 +406,21 @@
               <label for="reportPaidDateTo">Paid Date To</label>
               <input id="reportPaidDateTo" type="date" />
             </div>
-            <div class="field">
+                        <div class="field">
               <label for="reportStatusFilter">Invoice Status</label>
               <select id="reportStatusFilter">
                 <option value="">All</option>
                 <option value="Unpaid">Unpaid</option>
                 <option value="Partially Paid">Partially Paid</option>
                 <option value="Paid">Paid</option>
+              </select>
+            </div>
+            <div class="field">
+              <label for="reportInvoiceNumberSort">Invoice # Sort</label>
+              <select id="reportInvoiceNumberSort">
+                <option value="date_desc">Default (Invoice Date: Newest First)</option>
+                <option value="invoice_asc">Invoice #: Ascending</option>
+                <option value="invoice_desc">Invoice #: Descending</option>
               </select>
             </div>
           </div>
