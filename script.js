@@ -2899,11 +2899,9 @@ async function saveInvoice() {
     const paymentDate = todayStr();
 
     const paymentType =
-      state.paymentDraft.mode === "full"
-        ? "Pay by Invoice"
-        : state.paymentDraft.mode === "replacement"
-          ? "Replacement Payment"
-          : "Partial Payment";
+  state.paymentDraft.mode === "allocate"
+    ? "Partial Payment"
+    : "Pay by Invoice";
 
     const { data: payment, error: paymentError } = await supabaseClient
       .from("payments")
