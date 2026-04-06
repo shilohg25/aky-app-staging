@@ -172,7 +172,11 @@ paymentViewModal: byId("paymentViewModal"),
       execOverdue: byId("execOverdue"),
       agingTableBody: byId("agingTableBody"),
 
-      tbvTableBody: byId("tbvTableBody"),
+            tbvTableBody: byId("tbvTableBody"),
+      notificationTbvStatusFilter: byId("notificationTbvStatusFilter"),
+      notificationTbvInvoiceSearch: byId("notificationTbvInvoiceSearch"),
+      downloadTbvReportBtn: byId("downloadTbvReportBtn"),
+      printTbvReportBtn: byId("printTbvReportBtn"),
       notificationsOverdueBody: byId("notificationsOverdueBody"),
 
       reportCustomerFilter: byId("reportCustomerFilter"),
@@ -330,10 +334,15 @@ el.closePaymentViewModalBtn?.addEventListener("click", () => closeModal(el.payme
       renderExecutiveView();
     });
 
-    el.applyReportFilterBtn.addEventListener("click", renderReportsView);
+        el.applyReportFilterBtn.addEventListener("click", renderReportsView);
     el.clearReportFilterBtn.addEventListener("click", clearReportFilters);
     el.downloadReportBtn.addEventListener("click", downloadReportCsv);
     el.printReportBtn.addEventListener("click", printReport);
+
+    el.notificationTbvStatusFilter?.addEventListener("change", renderTbvRequestsTable);
+    el.notificationTbvInvoiceSearch?.addEventListener("input", renderTbvRequestsTable);
+    el.downloadTbvReportBtn?.addEventListener("click", downloadTbvReportCsv);
+    el.printTbvReportBtn?.addEventListener("click", printTbvReport);
 
     el.closeTbvModalBtn.addEventListener("click", () => closeModal(el.tbvModal));
     el.saveTbvBtn.addEventListener("click", saveTbvRequest);
@@ -3761,38 +3770,87 @@ el.execOutstanding.textContent = formatCompactPeso(
       el.chequeRegisterTableBody.appendChild(row);
     });
   }
+    function getFilteredTbvRows() {
+    const statusFilter = el.notificationTbvStatusFilter?.value || "";
+    const invoiceSearch = (el.notificationTbvInvoiceSearch?.value || "").trim().toLowerCase();
+
+    return state.tbvs
+      .slice()
+      .sort((a, b) => String(b.created_at).localeCompare(String(a.created_at)))
+      .map((tbv) => {
+        const invoice = state.invoices.find((x) => x.id === tbv.invoice_id);
+        const customer = state.customers.find((c) => c.id === invoice?.customer_id);
+        const requestedByRole = capitalizeRole(tbv.requested_by_role || "");
+        const requestedByDisplay = tbv.requested_by_name
+          ? (requestedByRole ? `${tbv.requested_by_name} (${requestedByRole})` : tbv.requested_by_name)
+          : "-";
+
+        return {
+          tbvId: tbv.id,
+          createdAtDisplay: tbv.created_at ? formatDateTime(tbv.created_at) : "-",
+          customerName: customer?.name || "-",
+          invoiceNumber: invoice?.invoice_number || "-",
+          invoiceStatusText: invoice?.status || "-",
+          invoiceStatusHtml: invoice ? statusPill(invoice.status) : "-",
+          requestedByDisplay,
+          explanation: tbv.explanation || "-",
+          tbvStatus: tbv.status || "-",
+          decisionDateDisplay: tbv.decided_at ? formatDateTime(tbv.decided_at) : "-",
+          decidedBy: tbv.decided_by_name || "-",
+          decisionNotes: tbv.decision_notes || "-",
+          canReview: tbv.status === "PENDING" && canApproveTbv()
+        };
+      })
+      .filter((row) => {
+        if (statusFilter && row.tbvStatus !== statusFilter) return false;
+        if (invoiceSearch && !String(row.invoiceNumber || "").toLowerCase().includes(invoiceSearch)) return false;
+        return true;
+      });
+  }
+
+  function renderTbvRequestsTable() {
+    if (!el.tbvTableBody) return;
+
+    const rows = getFilteredTbvRows();
+    el.tbvTableBody.innerHTML = "";
+
+    if (!rows.length) {
+      el.tbvTableBody.innerHTML = `<tr><td colspan="11" class="muted">No TBV requests found.</td></tr>`;
+      return;
+    }
+
+    rows.forEach((rowData) => {
+      const row = document.createElement("tr");
+      const actionHtml = rowData.canReview
+        ? `<button class="btn btn-light action-decide-tbv">Review</button>`
+        : "-";
+
+      row.innerHTML = `
+        <td>${escapeHtml(rowData.createdAtDisplay)}</td>
+        <td>${escapeHtml(rowData.customerName)}</td>
+        <td>${escapeHtml(rowData.invoiceNumber)}</td>
+        <td>${rowData.invoiceStatusHtml}</td>
+        <td>${escapeHtml(rowData.requestedByDisplay)}</td>
+        <td>${escapeHtml(rowData.explanation)}</td>
+        <td>${escapeHtml(rowData.tbvStatus)}</td>
+        <td>${escapeHtml(rowData.decisionDateDisplay)}</td>
+        <td>${escapeHtml(rowData.decidedBy)}</td>
+        <td>${escapeHtml(rowData.decisionNotes)}</td>
+        <td>${actionHtml}</td>
+      `;
+
+      row.querySelector(".action-decide-tbv")?.addEventListener("click", () => openTbvDecisionModal(rowData.tbvId));
+      el.tbvTableBody.appendChild(row);
+    });
+  }
+
   function renderNotificationsView() {
     if (!canViewNotifications()) return;
-    el.tbvTableBody.innerHTML = "";
+    renderTbvRequestsTable();
     el.notificationsOverdueBody.innerHTML = "";
 
     const postDatedChequesBody = ensurePostDatedChequesPanel();
     postDatedChequesBody.innerHTML = "";
-
-    const tbvs = state.tbvs.slice().sort((a, b) => String(b.created_at).localeCompare(String(a.created_at)));
-    if (!tbvs.length) {
-      el.tbvTableBody.innerHTML = `<tr><td colspan="8" class="muted">No TBV requests.</td></tr>`;
-    } else {
-      tbvs.forEach((tbv) => {
-        const invoice = state.invoices.find((x) => x.id === tbv.invoice_id);
-        const customer = state.customers.find((c) => c.id === invoice?.customer_id);
-        const row = document.createElement("tr");
-        let decisionButtons = "-";
-        if (tbv.status === "PENDING" && canApproveTbv()) decisionButtons = `<button class="btn btn-light action-decide-tbv">Review</button>`;
-                        row.innerHTML = `
-          <td>${formatDateTime(tbv.created_at)}</td>
-          <td>${escapeHtml(customer?.name || "-")}</td>
-          <td>${escapeHtml(invoice?.invoice_number || "-")}</td>
-          <td>${invoice ? statusPill(invoice.status) : "-"}</td>
-          <td>${escapeHtml(tbv.requested_by_name || "-")} (${escapeHtml(capitalizeRole(tbv.requested_by_role || ""))})</td>
-          <td>${escapeHtml(tbv.explanation || "-")}</td>
-          <td>${escapeHtml(tbv.status)}</td>
-          <td>${decisionButtons}</td>
-        `;
-        row.querySelector(".action-decide-tbv")?.addEventListener("click", () => openTbvDecisionModal(tbv.id));
-        el.tbvTableBody.appendChild(row);
-      });
-    }
 
     const postDatedCheques = getPostDatedChequeEntries();
     if (!postDatedCheques.length) {
@@ -3817,7 +3875,7 @@ el.execOutstanding.textContent = formatCompactPeso(
       });
     }
 
-        const overdue = getActiveInvoices().filter((x) => x.balance > 0 && getDaysOpen(x.invoice_date) > 90);
+    const overdue = getActiveInvoices().filter((x) => x.balance > 0 && getDaysOpen(x.invoice_date) > 90);
     if (!overdue.length) {
       el.notificationsOverdueBody.innerHTML = `<tr><td colspan="5" class="muted">No overdue invoices.</td></tr>`;
     } else {
@@ -3940,6 +3998,69 @@ el.execOutstanding.textContent = formatCompactPeso(
     el.reportStatusFilter.value = "";
     if (el.reportInvoiceNumberSort) el.reportInvoiceNumberSort.value = "date_desc";
     renderReportsView();
+  }
+
+    function downloadTbvReportCsv() {
+    const rows = getFilteredTbvRows();
+    if (!rows.length) return alert("No TBV rows to export.");
+
+    const headers = ["Date Requested", "Customer", "Invoice #", "Invoice Status", "Requested By", "Explanation", "TBV Status", "Decision Date", "Decided By", "Decision Notes"];
+    const csv = [
+      headers.join(","),
+      ...rows.map((row) => [
+        csvSafe(row.createdAtDisplay),
+        csvSafe(row.customerName),
+        csvSafe(row.invoiceNumber),
+        csvSafe(row.invoiceStatusText),
+        csvSafe(row.requestedByDisplay),
+        csvSafe(row.explanation),
+        csvSafe(row.tbvStatus),
+        csvSafe(row.decisionDateDisplay),
+        csvSafe(row.decidedBy),
+        csvSafe(row.decisionNotes)
+      ].join(","))
+    ].join("\n");
+
+    downloadTextFile(`AKY_TBV_Report_${todayStr()}.csv`, csv, "text/csv;charset=utf-8");
+  }
+
+  function printTbvReport() {
+    const rows = getFilteredTbvRows();
+    if (!rows.length) return alert("No TBV rows to print.");
+
+    const statusFilter = el.notificationTbvStatusFilter?.value || "All";
+    const invoiceSearch = (el.notificationTbvInvoiceSearch?.value || "").trim() || "None";
+    const html = `
+      <html><head><title>AKY TBV Report</title><style>
+      body { font-family: Arial, sans-serif; padding: 24px; color: #111; }
+      h1 { margin: 0 0 8px; }
+      .meta { margin-bottom: 16px; color: #555; }
+      table { width: 100%; border-collapse: collapse; font-size: 12px; }
+      th, td { border: 1px solid #ccc; padding: 8px; text-align: left; vertical-align: top; }
+      th { background: #f3f3f3; }
+      </style></head><body>
+      <h1>AKY TBV Report</h1>
+      <div class="meta">Generated on ${new Date().toLocaleString()}<br>TBV Status Filter: ${escapeHtml(statusFilter)}<br>Invoice # Search: ${escapeHtml(invoiceSearch)}</div>
+      <table><thead><tr>
+      <th>Date Requested</th><th>Customer</th><th>Invoice #</th><th>Invoice Status</th><th>Requested By</th><th>Explanation</th><th>TBV Status</th><th>Decision Date</th><th>Decided By</th><th>Decision Notes</th>
+      </tr></thead><tbody>
+      ${rows.map((row) => `
+        <tr>
+          <td>${escapeHtml(row.createdAtDisplay)}</td>
+          <td>${escapeHtml(row.customerName)}</td>
+          <td>${escapeHtml(row.invoiceNumber)}</td>
+          <td>${escapeHtml(row.invoiceStatusText)}</td>
+          <td>${escapeHtml(row.requestedByDisplay)}</td>
+          <td>${escapeHtml(row.explanation)}</td>
+          <td>${escapeHtml(row.tbvStatus)}</td>
+          <td>${escapeHtml(row.decisionDateDisplay)}</td>
+          <td>${escapeHtml(row.decidedBy)}</td>
+          <td>${escapeHtml(row.decisionNotes)}</td>
+        </tr>
+      `).join("")}
+      </tbody></table><script>window.onload = () => window.print();<\/script></body></html>`;
+
+    openPrintWindow(html);
   }
 
   function downloadReportCsv() {
