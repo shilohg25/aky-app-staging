@@ -388,24 +388,25 @@ el.generateSoaBtn.addEventListener("click", generateSoa);
   }
 
   async function bootstrap() {
-    const { data, error } = await supabaseClient.auth.getSession();
-    if (error || !data.session?.user) {
-      showLogin();
-      return;
-    }
-
-    const profile = await getProfile(data.session.user.id);
-    if (!profile) {
-      showLogin();
-      return;
-    }
-
-    state.currentProfile = profile;
-    await showApp();
-
-    // Staging: do not auto-open forced password change on login.
-// if (profile.must_change_password) openChangePasswordModal(true);
+  const { data, error } = await supabaseClient.auth.getSession();
+  if (error || !data.session?.user) {
+    showLogin();
+    return;
   }
+
+  const profile = await getProfile(data.session.user.id);
+  if (!profile) {
+    showLogin();
+    return;
+  }
+
+  state.currentProfile = profile;
+  await showApp();
+
+  if (profile.must_change_password) {
+    openChangePasswordModal(true);
+  }
+}
 
   async function getProfile(userId) {
     const { data, error } = await supabaseClient.from("profiles").select("*").eq("id", userId).single();
@@ -530,34 +531,35 @@ el.generateSoaBtn.addEventListener("click", generateSoa);
     return invoice.invoice_number || "Invoice";
   }
   async function login() {
-    const email = el.loginUsername.value.trim();
-    const password = el.loginPassword.value;
+  const email = el.loginUsername.value.trim();
+  const password = el.loginPassword.value;
 
-    if (!email || !password) {
-      el.loginMessage.textContent = "Please enter your email and password.";
-      return;
-    }
-
-    const { data, error } = await supabaseClient.auth.signInWithPassword({ email, password });
-    if (error) {
-      el.loginMessage.textContent = error.message;
-      return;
-    }
-
-    const profile = await getProfile(data.user.id);
-    if (!profile) {
-      el.loginMessage.textContent = "Profile not found.";
-      return;
-    }
-
-    state.currentProfile = profile;
-    el.loginMessage.textContent = "";
-    el.loginPassword.value = "";
-    await showApp();
-
-    // Staging: do not auto-open forced password change on login.
-// if (profile.must_change_password) openChangePasswordModal(true);
+  if (!email || !password) {
+    el.loginMessage.textContent = "Please enter your email and password.";
+    return;
   }
+
+  const { data, error } = await supabaseClient.auth.signInWithPassword({ email, password });
+  if (error) {
+    el.loginMessage.textContent = error.message;
+    return;
+  }
+
+  const profile = await getProfile(data.user.id);
+  if (!profile) {
+    el.loginMessage.textContent = "Profile not found.";
+    return;
+  }
+
+  state.currentProfile = profile;
+  el.loginMessage.textContent = "";
+  el.loginPassword.value = "";
+  await showApp();
+
+  if (profile.must_change_password) {
+    openChangePasswordModal(true);
+  }
+}
 
   async function logout() {
     await supabaseClient.auth.signOut();
@@ -570,15 +572,7 @@ el.generateSoaBtn.addEventListener("click", generateSoa);
   el.changePasswordTitle.textContent = force ? "Change Temporary Password" : "Change Password";
   el.newOwnPassword.value = "";
   el.confirmOwnPassword.value = "";
-
-  // Staging fix:
-  // Do not auto-open the password modal on login.
-  // Still allow manual opening from the sidebar button.
-  if (force) {
-    closeModal(el.changePasswordModal);
-    return;
-  }
-
+  el.changePasswordModal.dataset.force = force ? "1" : "0";
   openModal(el.changePasswordModal);
 }
 
@@ -618,6 +612,7 @@ el.generateSoaBtn.addEventListener("click", generateSoa);
     await supabaseClient.auth.signOut();
     state.currentProfile = null;
     state.selectedCustomerId = null;
+    el.changePasswordModal.dataset.force = "0";
     closeModal(el.changePasswordModal);
     showLogin();
     el.loginMessage.textContent = "Your login session is missing. Please log in again using the temporary password, then change it immediately.";
@@ -635,7 +630,8 @@ el.generateSoaBtn.addEventListener("click", generateSoa);
   if (profileError) return alert(profileError.message);
 
   state.currentProfile.must_change_password = false;
-  closeModal(el.changePasswordModal);
+  el.changePasswordModal.dataset.force = "0";
+  el.changePasswordModal.style.display = "none";
   renderCurrentUser();
   alert("Password changed successfully.");
 }
@@ -1186,156 +1182,108 @@ function renderCustomerContacts(customer) {
   }
 
     async function saveCustomer() {
-    const name = el.customerFormName.value.trim();
-    const phone = el.customerFormPhone.value.trim();
-    const email = el.customerFormEmail.value.trim();
+  const name = el.customerFormName.value.trim();
+  const phone = el.customerFormPhone.value.trim();
+  const email = el.customerFormEmail.value.trim();
 
-    if (!name) return alert("Customer name is required.");
-    if (!phone) return alert("Phone number is required.");
+  if (!name) return alert("Customer name is required.");
+  if (!phone) return alert("Phone number is required.");
 
-    const contacts = [...el.additionalContacts.querySelectorAll(".contact-card")].map((card) => ({
+  const contacts = [...el.additionalContacts.querySelectorAll(".contact-card")]
+    .map((card) => ({
       contact_name: card.querySelector(".contact-name")?.value.trim() || "",
       phone: card.querySelector(".contact-phone")?.value.trim() || "",
       email: card.querySelector(".contact-email")?.value.trim() || ""
-    })).filter((c) => c.contact_name || c.phone || c.email);
+    }))
+    .filter((c) => c.contact_name || c.phone || c.email);
 
-    const ownerCanConfigureDiscount = canAuthorizeCustomerDiscount();
+  const ownerCanConfigureDiscount = canAuthorizeCustomerDiscount();
+  const existingCustomer = state.editingCustomerId
+    ? state.customers.find((c) => c.id === state.editingCustomerId)
+    : null;
 
-    let discountAuthorized = false;
-    let discountMaxAmount = null;
-    let discountNote = null;
-    let discountAuthorizedBy = null;
-    let discountAuthorizedAt = null;
+  let discountAuthorized = false;
+  let discountMaxAmount = null;
+  let discountNote = null;
 
-    const existingCustomer = state.editingCustomerId
-      ? state.customers.find((c) => c.id === state.editingCustomerId)
-      : null;
+  if (ownerCanConfigureDiscount) {
+    discountAuthorized = !!el.customerDiscountAuthorizedInput.checked;
 
-    if (ownerCanConfigureDiscount) {
-      discountAuthorized = !!el.customerDiscountAuthorizedInput.checked;
-
-      if (discountAuthorized) {
-        discountMaxAmount = round2(num(el.customerDiscountMaxAmountInput.value));
-        if (discountMaxAmount <= 0) {
-          return alert("Max discount per invoice is required and must be greater than 0.");
-        }
-
-        discountNote = el.customerDiscountNoteInput.value.trim() || null;
-
-        if (existingCustomer?.discount_authorized) {
-          discountAuthorizedBy = existingCustomer.discount_authorized_by || state.currentProfile.id;
-          discountAuthorizedAt = existingCustomer.discount_authorized_at || new Date().toISOString();
-        } else {
-          discountAuthorizedBy = state.currentProfile.id;
-          discountAuthorizedAt = new Date().toISOString();
-        }
+    if (discountAuthorized) {
+      discountMaxAmount = round2(num(el.customerDiscountMaxAmountInput.value));
+      if (discountMaxAmount <= 0) {
+        return alert("Max discount per invoice is required and must be greater than 0.");
       }
+
+      discountNote = el.customerDiscountNoteInput.value.trim() || null;
     }
-
-    if (state.editingCustomerId) {
-      if (!canEditCustomer()) return;
-
-      const note = el.customerEditRequiredNote.value.trim();
-      if (editNoteRequired() && !note) return alert("Edit note is required for admin edits.");
-
-      const updatePayload = {
-        name,
-        phone,
-        email: email || null,
-        updated_at: new Date().toISOString()
-      };
-
-      if (ownerCanConfigureDiscount) {
-        updatePayload.discount_authorized = discountAuthorized;
-        updatePayload.discount_max_amount = discountAuthorized ? discountMaxAmount : null;
-        updatePayload.discount_note = discountAuthorized ? discountNote : null;
-        updatePayload.discount_authorized_by = discountAuthorized ? discountAuthorizedBy : null;
-        updatePayload.discount_authorized_at = discountAuthorized ? discountAuthorizedAt : null;
-      }
-
-      const { error } = await supabaseClient
-        .from("customers")
-        .update(updatePayload)
-        .eq("id", state.editingCustomerId);
-
-      if (error) return alert(error.message);
-
-      const { error: deleteContactsError } = await supabaseClient
-        .from("customer_contacts")
-        .delete()
-        .eq("customer_id", state.editingCustomerId);
-
-      if (deleteContactsError) return alert(deleteContactsError.message);
-
-      if (contacts.length) {
-        const { error: contactErr } = await supabaseClient
-          .from("customer_contacts")
-          .insert(contacts.map((c) => ({ ...c, customer_id: state.editingCustomerId })));
-
-        if (contactErr) return alert(contactErr.message);
-      }
-
-      await addLog("Edit", "Customer", existingCustomer?.name || name, note, existingCustomer || null, updatePayload);
-    } else {
-      if (!canCreateCustomer()) return;
-
-      const insertPayload = {
-        name,
-        phone,
-        email: email || null,
-        created_by: state.currentProfile.id
-      };
-
-      if (ownerCanConfigureDiscount) {
-        insertPayload.discount_authorized = discountAuthorized;
-        insertPayload.discount_max_amount = discountAuthorized ? discountMaxAmount : null;
-        insertPayload.discount_note = discountAuthorized ? discountNote : null;
-        insertPayload.discount_authorized_by = discountAuthorized ? state.currentProfile.id : null;
-        insertPayload.discount_authorized_at = discountAuthorized ? new Date().toISOString() : null;
-      }
-
-      const { data, error } = await supabaseClient
-        .from("customers")
-        .insert([insertPayload])
-        .select()
-        .single();
-
-      if (error) return alert(error.message);
-
-      if (contacts.length) {
-        const { error: contactErr } = await supabaseClient
-          .from("customer_contacts")
-          .insert(contacts.map((c) => ({ ...c, customer_id: data.id })));
-
-        if (contactErr) return alert(contactErr.message);
-      }
-
-      state.selectedCustomerId = data.id;
-      await addLog("Create", "Customer", name, "", null, data);
-    }
-
-    closeModal(el.customerModal);
-    state.editingCustomerId = null;
-        await refreshSelectedCustomerOnly();
-    alert("Customer saved successfully.");
   }
+
+  if (state.editingCustomerId) {
+    if (!canEditCustomer()) return;
+
+    const note = el.customerEditRequiredNote.value.trim();
+    if (editNoteRequired() && !note) return alert("Edit note is required for admin edits.");
+
+    const { data, error } = await supabaseClient.rpc("save_customer_with_contacts", {
+      p_customer_id: state.editingCustomerId,
+      p_name: name,
+      p_phone: phone,
+      p_email: email || null,
+      p_contacts: contacts,
+      p_discount_authorized: discountAuthorized,
+      p_discount_max_amount: discountAuthorized ? discountMaxAmount : null,
+      p_discount_note: discountAuthorized ? discountNote : null
+    });
+
+    if (error) return alert(error.message);
+
+    await addLog("Edit", "Customer", existingCustomer?.name || name, note, existingCustomer || null, data || null);
+  } else {
+    if (!canCreateCustomer()) return;
+
+    const { data, error } = await supabaseClient.rpc("save_customer_with_contacts", {
+      p_customer_id: null,
+      p_name: name,
+      p_phone: phone,
+      p_email: email || null,
+      p_contacts: contacts,
+      p_discount_authorized: discountAuthorized,
+      p_discount_max_amount: discountAuthorized ? discountMaxAmount : null,
+      p_discount_note: discountAuthorized ? discountNote : null
+    });
+
+    if (error) return alert(error.message);
+
+    state.selectedCustomerId = data.id;
+    await addLog("Create", "Customer", name, "", null, data || null);
+  }
+
+  closeModal(el.customerModal);
+  state.editingCustomerId = null;
+  await refreshSelectedCustomerOnly();
+  alert("Customer saved successfully.");
+}
 
   async function deleteSelectedCustomer() {
-    if (!canDeleteCustomer()) return;
-    const customer = getSelectedCustomer();
-    if (!customer) return alert("Please select a customer first.");
-    if (customer.invoices.length || customer.payments.length) return alert("This customer cannot be deleted because it already has invoices or payments. Keep the record for accountability.");
-    const confirmed = window.confirm(`Delete customer "${customer.name}"? This cannot be undone.`);
-    if (!confirmed) return;
-    const { error: contactError } = await supabaseClient.from("customer_contacts").delete().eq("customer_id", customer.id);
-    if (contactError) return alert(contactError.message);
-    const { error: customerError } = await supabaseClient.from("customers").delete().eq("id", customer.id);
-    if (customerError) return alert(customerError.message);
-    await addLog("Delete", "Customer", customer.name, "Deleted by owner", customer, null);
-    state.selectedCustomerId = null;
-    await refreshAndRenderAll();
-    alert("Customer deleted successfully.");
-  }
+  if (!canDeleteCustomer()) return;
+  const customer = getSelectedCustomer();
+  if (!customer) return alert("Please select a customer first.");
+
+  const confirmed = window.confirm(`Delete customer "${customer.name}"? This cannot be undone.`);
+  if (!confirmed) return;
+
+  const { error } = await supabaseClient.rpc("delete_customer_safe", {
+    p_customer_id: customer.id
+  });
+
+  if (error) return alert(error.message);
+
+  await addLog("Delete", "Customer", customer.name, "Deleted by owner", customer, null);
+  state.selectedCustomerId = null;
+  await refreshAndRenderAll();
+  alert("Customer deleted successfully.");
+}
 
     function openInvoiceModalForCreate() {
     if (!canCreateInvoice()) return;
@@ -1971,24 +1919,6 @@ async function saveInvoice() {
     return alert("Invoice number is invalid.");
   }
 
-  const duplicateInvoice = findDuplicateInvoiceByNumber(invoiceNumber, state.editingInvoiceId);
-  if (duplicateInvoice) {
-    const duplicateCustomer = state.customers.find((c) => c.id === duplicateInvoice.customer_id);
-    const duplicateStatus = duplicateInvoice.is_voided
-      ? "Voided"
-      : (duplicateInvoice.status || duplicateInvoice.primary_status || "Existing");
-
-    return alert(
-      `Invoice number "${invoiceNumber}" already exists.\n\n` +
-      `Existing record:\n` +
-      `Customer: ${duplicateCustomer?.name || "-"}\n` +
-      `Invoice #: ${duplicateInvoice.invoice_number || "-"}\n` +
-      `Date: ${duplicateInvoice.invoice_date || "-"}\n` +
-      `Status: ${duplicateStatus}\n\n` +
-      `Duplicate invoice numbers are not allowed, including voided invoices. Please use a new unique invoice number.`
-    );
-  }
-
   const editorState = getInvoiceEditorState();
 
   if (!editorState.items.length) {
@@ -2013,7 +1943,6 @@ async function saveInvoice() {
     line_total: item.line_total
   }));
 
-  const total = editorState.totalAmount;
   let savedInvoiceId = state.editingInvoiceId || null;
   let documentMessage = "";
 
@@ -2030,99 +1959,52 @@ async function saveInvoice() {
       return alert("Admin cannot edit partially paid or paid invoices.");
     }
 
-    const paidAmount = Number(oldInvoice.paidAmount || 0);
-    const balanceAmount = round2(Math.max(0, total - paidAmount));
-    const primaryStatus = balanceAmount <= 0 ? "PAID" : balanceAmount < total ? "PARTIALLY_PAID" : "UNPAID";
-
-    const { error } = await supabaseClient
-      .from("invoices")
-      .update({
-        invoice_number: invoiceNumber,
-        invoice_number_key: invoiceNumberKey,
-        invoice_date: invoiceDate,
-        po_number: poNumber || null,
-        reference_info: referenceInfo || null,
-        subtotal_amount: editorState.subtotalAmount,
-        line_discount_total: editorState.lineDiscountTotal,
-        invoice_discount_amount: editorState.invoiceDiscountAmount,
-        discount_total_amount: editorState.discountTotalAmount,
-        discount_mode: editorState.discountEnabled ? editorState.discountMode : "none",
-        discount_reason: editorState.discountEnabled ? (editorState.discountReason || null) : null,
-        total_amount: total,
-        balance_amount: balanceAmount,
-        primary_status: primaryStatus,
-        updated_at: new Date().toISOString()
-      })
-      .eq("id", state.editingInvoiceId);
+    const { data, error } = await supabaseClient.rpc("save_invoice_with_items", {
+      p_invoice_id: state.editingInvoiceId,
+      p_customer_id: customer.id,
+      p_invoice_number: invoiceNumber,
+      p_invoice_number_key: invoiceNumberKey,
+      p_invoice_date: invoiceDate,
+      p_po_number: poNumber || null,
+      p_reference_info: referenceInfo || null,
+      p_items: items,
+      p_subtotal_amount: editorState.subtotalAmount,
+      p_line_discount_total: editorState.lineDiscountTotal,
+      p_invoice_discount_amount: editorState.invoiceDiscountAmount,
+      p_discount_total_amount: editorState.discountTotalAmount,
+      p_discount_mode: editorState.discountEnabled ? editorState.discountMode : "none",
+      p_discount_reason: editorState.discountEnabled ? (editorState.discountReason || null) : null,
+      p_total_amount: editorState.totalAmount
+    });
 
     if (error) return alert(error.message);
 
-    const { error: deleteItemsError } = await supabaseClient
-      .from("invoice_items")
-      .delete()
-      .eq("invoice_id", state.editingInvoiceId);
-
-    if (deleteItemsError) return alert(deleteItemsError.message);
-
-    const { error: itemError } = await supabaseClient
-      .from("invoice_items")
-      .insert(items.map((i) => ({ ...i, invoice_id: state.editingInvoiceId })));
-
-    if (itemError) return alert(itemError.message);
-
-    await addLog("Edit", "Invoice", invoiceNumber, editNote, oldInvoice, {
-      invoice_number: invoiceNumber,
-      invoice_date: invoiceDate,
-      po_number: poNumber,
-      reference_info: referenceInfo,
-      subtotal_amount: editorState.subtotalAmount,
-      line_discount_total: editorState.lineDiscountTotal,
-      invoice_discount_amount: editorState.invoiceDiscountAmount,
-      discount_total_amount: editorState.discountTotalAmount,
-      discount_mode: editorState.discountEnabled ? editorState.discountMode : "none",
-      discount_reason: editorState.discountEnabled ? (editorState.discountReason || null) : null,
-      total_amount: total
-    });
-
+    await addLog("Edit", "Invoice", invoiceNumber, editNote, oldInvoice, data || null);
     savedInvoiceId = state.editingInvoiceId;
   } else {
     if (!canCreateInvoice()) return;
 
-    const { data, error } = await supabaseClient
-      .from("invoices")
-      .insert([{
-        customer_id: customer.id,
-        invoice_number: invoiceNumber,
-        invoice_number_key: invoiceNumberKey,
-        invoice_date: invoiceDate,
-        po_number: poNumber || null,
-        reference_info: referenceInfo || null,
-        subtotal_amount: editorState.subtotalAmount,
-        line_discount_total: editorState.lineDiscountTotal,
-        invoice_discount_amount: editorState.invoiceDiscountAmount,
-        discount_total_amount: editorState.discountTotalAmount,
-        discount_mode: editorState.discountEnabled ? editorState.discountMode : "none",
-        discount_reason: editorState.discountEnabled ? (editorState.discountReason || null) : null,
-        total_amount: total,
-        paid_amount: 0,
-        balance_amount: total,
-        primary_status: "UNPAID",
-        payment_notice_status: "NONE",
-        created_by: state.currentProfile.id,
-        is_voided: false
-      }])
-      .select()
-      .single();
+    const { data, error } = await supabaseClient.rpc("save_invoice_with_items", {
+      p_invoice_id: null,
+      p_customer_id: customer.id,
+      p_invoice_number: invoiceNumber,
+      p_invoice_number_key: invoiceNumberKey,
+      p_invoice_date: invoiceDate,
+      p_po_number: poNumber || null,
+      p_reference_info: referenceInfo || null,
+      p_items: items,
+      p_subtotal_amount: editorState.subtotalAmount,
+      p_line_discount_total: editorState.lineDiscountTotal,
+      p_invoice_discount_amount: editorState.invoiceDiscountAmount,
+      p_discount_total_amount: editorState.discountTotalAmount,
+      p_discount_mode: editorState.discountEnabled ? editorState.discountMode : "none",
+      p_discount_reason: editorState.discountEnabled ? (editorState.discountReason || null) : null,
+      p_total_amount: editorState.totalAmount
+    });
 
     if (error) return alert(error.message);
 
-    const { error: itemError } = await supabaseClient
-      .from("invoice_items")
-      .insert(items.map((i) => ({ ...i, invoice_id: data.id })));
-
-    if (itemError) return alert(itemError.message);
-
-    await addLog("Create", "Invoice", invoiceNumber, "", null, data);
+    await addLog("Create", "Invoice", invoiceNumber, "", null, data || null);
     savedInvoiceId = data.id;
   }
 
@@ -4632,7 +4514,13 @@ function renderLogSortIndicators() {
   }
 
   function openModal(node) { node.style.display = "flex"; }
-  function closeModal(node) { node.style.display = "none"; }
+  function closeModal(node) {
+  if (node === el.changePasswordModal && el.changePasswordModal?.dataset?.force === "1") {
+    return;
+  }
+
+  node.style.display = "none";
+}
 
       function formatPaymentDetails(payment) {
     const details = getPaymentDetailsObject(payment);
