@@ -2926,66 +2926,31 @@ async function saveInvoice() {
     const paymentDate = todayStr();
 
     const paymentType =
-  state.paymentDraft.mode === "allocate"
-    ? "Partial Payment"
-    : "Pay by Invoice";
+      state.paymentDraft.mode === "allocate"
+        ? "Partial Payment"
+        : "Pay by Invoice";
 
-    const { data: payment, error: paymentError } = await supabaseClient
-      .from("payments")
-      .insert([{
-        customer_id: customer.id,
-        payment_date: paymentDate,
-        payment_type: paymentType,
-        method,
-        amount,
-        details,
-        cleared,
-        created_by: state.currentProfile.id,
-        created_by_name: state.currentProfile.username,
-        created_by_role: state.currentProfile.role
-      }])
-      .select()
-      .single();
-
-    if (paymentError) return alert(paymentError.message);
-
-    const allocRows = state.paymentDraft.allocations.map((alloc) => ({
-      payment_id: payment.id,
-      invoice_id: alloc.invoiceId,
-      allocated_amount: alloc.amount
+    const rpcAllocations = state.paymentDraft.allocations.map((alloc) => ({
+      invoiceId: alloc.invoiceId,
+      amount: round2(alloc.amount)
     }));
 
-    const { error: allocError } = await supabaseClient
-      .from("payment_allocations")
-      .insert(allocRows);
+    const { data: payment, error: paymentError } = await supabaseClient.rpc("save_payment_fast", {
+      p_customer_id: customer.id,
+      p_payment_date: paymentDate,
+      p_payment_type: paymentType,
+      p_method: method,
+      p_amount: amount,
+      p_details: details,
+      p_cleared: cleared,
+      p_created_by: state.currentProfile.id,
+      p_created_by_name: state.currentProfile.username,
+      p_created_by_role: state.currentProfile.role,
+      p_allocations: rpcAllocations
+    });
 
-    if (allocError) return alert(allocError.message);
-
-    if (cleared) {
-      for (const alloc of state.paymentDraft.allocations) {
-        const invoice = state.invoices.find((x) => x.id === alloc.invoiceId);
-        if (!invoice) continue;
-
-        const newPaid = round2(Number(invoice.paidAmount || invoice.paid_amount || 0) + alloc.amount);
-        const newBalance = round2(Math.max(0, Number(invoice.total || invoice.total_amount || 0) - newPaid));
-        const newStatus = newBalance <= 0
-          ? "PAID"
-          : newBalance < Number(invoice.total || invoice.total_amount || 0)
-            ? "PARTIALLY_PAID"
-            : "UNPAID";
-
-        const { error } = await supabaseClient
-          .from("invoices")
-          .update({
-            paid_amount: newPaid,
-            balance_amount: newBalance,
-            primary_status: newStatus
-          })
-          .eq("id", alloc.invoiceId);
-
-        if (error) return alert(error.message);
-      }
-    }
+    if (paymentError) return alert(paymentError.message);
+    if (!payment?.id) return alert("Payment save did not return a payment record.");
 
     let paymentDocumentSaved = false;
     let paymentDocumentErrorMessage = "";
