@@ -172,7 +172,7 @@
               </div>
             </div>
 
-            <div id="docVaultUploader" class="panel soft-panel hidden" style="margin-bottom:16px;">
+            <div id="docVaultUploader" class="panel soft-panel hidden mb-16">
               <div class="panel-row">
                 <h4 class="panel-title small-title">Save Document</h4>
                 <label class="doc-upload-btn">
@@ -216,12 +216,12 @@
                 <img id="customerDocumentPreviewImg" class="doc-preview-img" alt="Document preview" />
               </div>
 
-              <div class="btn-row" style="margin-top:12px;">
+              <div class="btn-row mt-12">
                 <button id="saveCustomerDocumentBtn" class="btn btn-primary" type="button">Save Document</button>
                 <button id="clearCustomerDocumentBtn" class="btn btn-light" type="button">Clear</button>
               </div>
 
-              <div id="customerDocumentStatus" class="info-box" style="margin-top:12px;">
+              <div id="customerDocumentStatus" class="info-box mt-12">
                 Choose an image or paste a screenshot. Max 6MB.
               </div>
             </div>
@@ -310,7 +310,7 @@
             </div>
           </div>
 
-          <div class="form-grid two-col" style="margin-top: 14px;">
+          <div class="form-grid two-col mt-14">
             <div class="field">
               <label for="notificationTbvStatusFilter">TBV Status</label>
               <select id="notificationTbvStatusFilter">
@@ -608,7 +608,7 @@
     </label>
   </div>
 
-  <div id="customerDiscountConfigFields" class="form-grid one-col hidden" style="margin-top:12px;">
+  <div id="customerDiscountConfigFields" class="form-grid one-col hidden mt-12">
     <div class="field">
       <label for="customerDiscountMaxAmountInput">Max Discount Per Invoice *</label>
       <input id="customerDiscountMaxAmountInput" type="number" min="0" step="0.01" />
@@ -624,7 +624,7 @@
     </div>
   </div>
 
-  <div id="customerDiscountHelpText" class="info-box" style="margin-top:12px;">
+  <div id="customerDiscountHelpText" class="info-box mt-12">
     Owner-only control. If enabled, max discount per invoice is required.
   </div>
 </div>
@@ -685,7 +685,7 @@
     Click here, then press Ctrl + V to paste an invoice screenshot or snippet.
   </div>
 
-  <div class="btn-row" style="margin-top:12px;">
+  <div class="btn-row mt-12">
     <button id="invoiceAiAnalyzeBtn" class="btn btn-secondary" type="button">Analyze with AI</button>
     <button id="invoiceAiClearBtn" class="btn btn-light" type="button">Clear</button>
   </div>
@@ -694,7 +694,7 @@
     <img id="invoiceAiPreviewImg" class="ai-preview-img" alt="Invoice preview" />
   </div>
 
-  <div id="invoiceAiStatus" class="info-box" style="margin-top:12px;">
+  <div id="invoiceAiStatus" class="info-box mt-12">
     Nothing uploaded yet.
   </div>
 </div>
@@ -703,7 +703,7 @@
     <h4 class="panel-title small-title">Invoice Document</h4>
   </div>
 
-  <div class="form-grid one-col" style="margin-top:12px;">
+  <div class="form-grid one-col mt-12">
     <div class="field">
       <label for="invoiceDocumentFileInput">Upload Invoice Image</label>
       <input id="invoiceDocumentFileInput" type="file" accept="image/*" />
@@ -719,11 +719,11 @@
     <img id="invoiceDocumentPreviewImg" class="doc-preview-img" alt="Invoice document preview" />
   </div>
 
-  <div class="btn-row" style="margin-top:12px;">
+  <div class="btn-row mt-12">
     <button id="clearInvoiceDocumentBtn" class="btn btn-light" type="button">Remove Document</button>
   </div>
 
-  <div id="invoiceDocumentStatus" class="info-box" style="margin-top:12px;">
+  <div id="invoiceDocumentStatus" class="info-box mt-12">
     Optional. Upload an image. It will be saved to Document Vault using the invoice number after the invoice is saved.
   </div>
 </div>
@@ -736,7 +736,7 @@
     </label>
   </div>
 
-  <div id="invoiceDiscountControls" class="form-grid two-col hidden" style="margin-top:12px;">
+  <div id="invoiceDiscountControls" class="form-grid two-col hidden mt-12">
     <div class="field">
       <label for="invoiceDiscountMode">Discount Mode</label>
       <select id="invoiceDiscountMode">
@@ -750,7 +750,7 @@
       <input id="invoiceDiscountFixedAmount" type="number" min="0" step="0.01" />
     </div>
 
-    <div id="invoiceDiscountReasonWrap" class="field" style="grid-column: 1 / -1;">
+    <div id="invoiceDiscountReasonWrap" class="field grid-span-full">
       <label for="invoiceDiscountReason">Discount Reason *</label>
       <textarea
         id="invoiceDiscountReason"
@@ -760,7 +760,7 @@
     </div>
   </div>
 
-  <div id="invoiceDiscountSummary" class="info-box" style="margin-top:12px;"></div>
+  <div id="invoiceDiscountSummary" class="info-box mt-12"></div>
 </div>
       <div class="panel soft-panel">
         <div class="panel-row">
@@ -890,7 +890,7 @@
           <h4 class="panel-title small-title">Payment Proof</h4>
         </div>
 
-        <div class="form-grid one-col" style="margin-top:12px;">
+        <div class="form-grid one-col mt-12">
           <div class="field">
             <label for="paymentDocumentFileInput">Upload Payment Proof Image</label>
             <input id="paymentDocumentFileInput" type="file" accept="image/*" />
@@ -901,11 +901,11 @@
           <img id="paymentDocumentPreviewImg" class="doc-preview-img" alt="Payment proof preview" />
         </div>
 
-        <div class="btn-row" style="margin-top:12px;">
+        <div class="btn-row mt-12">
           <button id="clearPaymentDocumentBtn" class="btn btn-light" type="button">Remove Document</button>
         </div>
 
-        <div id="paymentDocumentStatus" class="info-box" style="margin-top:12px;">
+        <div id="paymentDocumentStatus" class="info-box mt-12">
           Optional. Upload one payment proof image. It will be saved to Document Vault after the payment is saved.
         </div>
       </div>
@@ -951,7 +951,7 @@
           </label>
         </div>
 
-        <div id="withholdingTaxPreviewBox" class="info-box" style="margin-top:12px;">
+        <div id="withholdingTaxPreviewBox" class="info-box mt-12">
           Current rate: <strong id="withholdingTaxRateLabel">1%</strong><br>
           Formula: <strong>Gross / 1.12 × Rate</strong><br>
           Gross settles the invoice. Net is stored for audit and reporting.
