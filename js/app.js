@@ -1522,35 +1522,6 @@ function renderCustomerContacts(customer) {
     updateInvoiceTotal();
   }
 
-  function updateInvoiceDiscountSummary(editorState) {
-    if (!el.invoiceDiscountSummary) return;
-
-    if (!editorState.discountAuthorized) {
-      el.invoiceDiscountSummary.innerHTML = "Discounts are not enabled for this customer.";
-      return;
-    }
-
-    if (!editorState.discountEnabled) {
-      el.invoiceDiscountSummary.innerHTML = `
-        Customer is discount-authorized.<br>
-        Max discount per invoice: <strong>${formatPeso(editorState.capAmount)}</strong>
-      `;
-      return;
-    }
-
-    const capStatus = editorState.exceedsCap
-      ? `<span style="color:#c73636;"><strong>Over cap by ${formatPeso(editorState.discountTotalAmount - editorState.capAmount)}</strong></span>`
-      : `<strong>Within cap</strong>`;
-
-    el.invoiceDiscountSummary.innerHTML = `
-      Subtotal: <strong>${formatPeso(editorState.subtotalAmount)}</strong><br>
-      Line Discounts: <strong>${formatPeso(editorState.lineDiscountTotal)}</strong><br>
-      Fixed Invoice Discount: <strong>${formatPeso(editorState.invoiceDiscountAmount)}</strong><br>
-      Total Discount: <strong>${formatPeso(editorState.discountTotalAmount)}</strong><br>
-      Final Invoice Total: <strong>${formatPeso(editorState.totalAmount)}</strong><br>
-      Customer Discount Cap: <strong>${formatPeso(editorState.capAmount)}</strong> | ${capStatus}
-    `;
-  }
         function addLineItemRow(item = {}) {
     const row = document.createElement("div");
     row.className = "line-item";
@@ -1594,30 +1565,6 @@ function renderCustomerContacts(customer) {
     }
 
     return box;
-  }
-  function renderInvoiceDiscountBreakdown(editorState) {
-    const box = getInvoiceDiscountBreakdownBox();
-    if (!box) return;
-
-    if (!editorState.discountAuthorized) {
-      box.innerHTML = `
-        Discount not authorized for this customer.<br>
-        Subtotal: <strong>${formatPeso(editorState.subtotalAmount)}</strong><br>
-        Final Total: <strong>${formatPeso(editorState.totalAmount)}</strong>
-      `;
-      return;
-    }
-
-    const capNote = editorState.exceedsCap
-      ? `<span style="color:#c73636;"><strong>Over cap by ${formatPeso(editorState.discountTotalAmount - editorState.capAmount)}</strong></span>`
-      : `<strong>Within cap</strong>`;
-
-    box.innerHTML = `
-      Subtotal: <strong>${formatPeso(editorState.subtotalAmount)}</strong><br>
-      Discount: <strong>${formatPeso(editorState.discountTotalAmount)}</strong><br>
-      Final Total: <strong>${formatPeso(editorState.totalAmount)}</strong><br>
-      Customer Discount Cap: <strong>${formatPeso(editorState.capAmount)}</strong> | ${capNote}
-    `;
   }
         function updateInvoiceTotal() {
     const editorState = getInvoiceEditorState();
@@ -1673,21 +1620,6 @@ function renderCustomerContacts(customer) {
       .replace(/[^A-Z0-9]/g, "");
   }
 
-  function findDuplicateInvoiceByNumber(invoiceNumber, currentInvoiceId = null) {
-    const targetKey = normalizeInvoiceNumberForKey(invoiceNumber);
-    if (!targetKey) return null;
-
-    return state.invoices.find((invoice) => {
-      if (!invoice) return false;
-      if (currentInvoiceId && invoice.id === currentInvoiceId) return false;
-
-      const existingKey =
-        invoice.invoice_number_key ||
-        normalizeInvoiceNumberForKey(invoice.invoice_number);
-
-      return existingKey === targetKey;
-    }) || null;
-  }
     const invoiceDocumentState = {
   file: null,
   previewUrl: "",
@@ -5651,14 +5583,6 @@ window.AKY_loadCustomerDocuments = loadCustomerDocuments;
 
     return cleaned || `document-${Date.now()}.png`;
   }
-
-  function docVaultExtFromMime(mimeType) {
-    if (mimeType === "image/jpeg") return "jpg";
-    if (mimeType === "image/webp") return "webp";
-    if (mimeType === "image/gif") return "gif";
-    return "png";
-  }
-
   function docVaultFormatBytes(bytes) {
     const value = Number(bytes || 0);
     if (value < 1024) return `${value} B`;
