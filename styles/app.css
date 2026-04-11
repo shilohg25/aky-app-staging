@@ -37,7 +37,21 @@ body {
 .hidden {
   display: none !important;
 }
+.mt-12 {
+  margin-top: 12px;
+}
 
+.mt-14 {
+  margin-top: 14px;
+}
+
+.mb-16 {
+  margin-bottom: 16px;
+}
+
+.grid-span-full {
+  grid-column: 1 / -1;
+}
 .muted {
   color: var(--muted);
 }
@@ -226,8 +240,7 @@ body {
   justify-content: center;
 }
 
-.summary-grid,
-.exec-layout {
+.summary-grid {
   display: grid;
   gap: 16px;
 }
@@ -362,10 +375,6 @@ body {
 .status-unpaid {
   background: #fdecec;
   color: var(--danger);
-}
-
-.notice-none {
-  color: var(--muted);
 }
 
 .notice-postdated {
@@ -711,59 +720,6 @@ textarea {
   justify-content: center;
   margin-bottom: 16px;
 }
-
-.aky-sign {
-  position: relative;
-  width: 180px;
-  height: 92px;
-  border-radius: 18px;
-  overflow: hidden;
-  border: 2px solid rgba(25, 25, 25, 0.12);
-  box-shadow: 0 10px 22px rgba(0, 0, 0, 0.14), inset 0 1px 0 rgba(255, 255, 255, 0.6);
-  background: #fff;
-}
-
-.aky-stripes {
-  position: absolute;
-  inset: 0;
-  background: linear-gradient(
-    180deg,
-    #f3b2b2 0%,
-    #f3b2b2 28%,
-    #ffffff 28%,
-    #ffffff 56%,
-    #b4cbf3 56%,
-    #b4cbf3 78%,
-    #b8e1b5 78%,
-    #b8e1b5 100%
-  );
-}
-
-.aky-text {
-  position: absolute;
-  inset: 0;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-family: "Cooper Black", Georgia, "Times New Roman", serif;
-  font-size: 48px;
-  font-weight: 900;
-  letter-spacing: 2px;
-  color: #fff;
-  text-shadow: 1px 1px 0 #ff6666, 3px 3px 0 rgba(0, 0, 0, 0.16), 0 0 0 #4caf50, 0 0 0 #2196f3;
-}
-
-.aky-text::before {
-  content: "AKY";
-  position: absolute;
-  color: transparent;
-  background: linear-gradient(90deg, #e44747 0%, #3fb35e 50%, #2d8fff 100%);
-  -webkit-background-clip: text;
-  background-clip: text;
-  filter: saturate(1.1);
-  text-shadow: 0 1px 0 rgba(255, 255, 255, 0.45), 4px 5px 0 rgba(0, 0, 0, 0.12);
-}
-
 .report-grid {
   grid-template-columns: repeat(3, minmax(0, 1fr));
 }
