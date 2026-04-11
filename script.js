@@ -387,26 +387,35 @@ el.generateSoaBtn.addEventListener("click", generateSoa);
     window.addEventListener("offline", () => alert("You are offline. Already-loaded data can still be viewed, printed, and exported on this device."));
   }
 
-  async function bootstrap() {
-  const { data, error } = await supabaseClient.auth.getSession();
-  if (error || !data.session?.user) {
-    showLogin();
-    return;
-  }
+    async function bootstrap() {
+    if (!ensureSupabaseClientReady()) return;
 
-  const profile = await getProfile(data.session.user.id);
-  if (!profile) {
-    showLogin();
-    return;
-  }
+    try {
+      const { data, error } = await supabaseClient.auth.getSession();
+      if (error || !data.session?.user) {
+        showLogin();
+        return;
+      }
 
-  state.currentProfile = profile;
-  await showApp();
+      const profile = await getProfile(data.session.user.id);
+      if (!profile) {
+        showLogin();
+        el.loginMessage.textContent = "Profile not found for this account.";
+        return;
+      }
 
-  if (profile.must_change_password) {
-    openChangePasswordModal(true);
+      state.currentProfile = profile;
+      await showApp();
+
+      if (profile.must_change_password) {
+        openChangePasswordModal(true);
+      }
+    } catch (error) {
+      console.error(error);
+      showLogin();
+      el.loginMessage.textContent = error?.message || getStartupErrorMessage();
+    }
   }
-}
 
   async function getProfile(userId) {
     const { data, error } = await supabaseClient.from("profiles").select("*").eq("id", userId).single();
@@ -504,7 +513,21 @@ el.generateSoaBtn.addEventListener("click", generateSoa);
       if (el.customerDiscountNoteInput) el.customerDiscountNoteInput.value = "";
     }
   }
-  function editNoteRequired() { return getRoleConfig().noteRequiredOnEdit; }
+    function editNoteRequired() { return getRoleConfig().noteRequiredOnEdit; }
+
+  function getStartupErrorMessage() {
+    return window.__AKY_STARTUP_ERROR__ || "Could not connect to the server. Check your internet connection, then refresh the page.";
+  }
+
+  function ensureSupabaseClientReady() {
+    if (supabaseClient) return true;
+
+    showLogin();
+    if (el.loginMessage) {
+      el.loginMessage.textContent = getStartupErrorMessage();
+    }
+    return false;
+  }
     function canEditInvoiceRecord(invoice) {
     if (!invoice) return false;
     if (!canEditInvoice()) return false;
@@ -530,36 +553,53 @@ el.generateSoaBtn.addEventListener("click", generateSoa);
     }
     return invoice.invoice_number || "Invoice";
   }
-  async function login() {
-  const email = el.loginUsername.value.trim();
-  const password = el.loginPassword.value;
+    async function login() {
+    if (!ensureSupabaseClientReady()) return;
+    if (el.loginBtn.dataset.busy === "1") return;
 
-  if (!email || !password) {
-    el.loginMessage.textContent = "Please enter your email and password.";
-    return;
+    const email = el.loginUsername.value.trim();
+    const password = el.loginPassword.value;
+
+    if (!email || !password) {
+      el.loginMessage.textContent = "Please enter your email and password.";
+      return;
+    }
+
+    el.loginBtn.dataset.busy = "1";
+    el.loginBtn.disabled = true;
+    const originalLoginText = el.loginBtn.textContent || "Login";
+    el.loginBtn.textContent = "Logging in...";
+    el.loginMessage.textContent = "";
+
+    try {
+      const { data, error } = await supabaseClient.auth.signInWithPassword({ email, password });
+      if (error) {
+        el.loginMessage.textContent = error.message;
+        return;
+      }
+
+      const profile = await getProfile(data.user.id);
+      if (!profile) {
+        el.loginMessage.textContent = "Profile not found for this account.";
+        return;
+      }
+
+      state.currentProfile = profile;
+      el.loginPassword.value = "";
+      await showApp();
+
+      if (profile.must_change_password) {
+        openChangePasswordModal(true);
+      }
+    } catch (error) {
+      console.error(error);
+      el.loginMessage.textContent = error?.message || getStartupErrorMessage();
+    } finally {
+      el.loginBtn.dataset.busy = "0";
+      el.loginBtn.disabled = false;
+      el.loginBtn.textContent = originalLoginText;
+    }
   }
-
-  const { data, error } = await supabaseClient.auth.signInWithPassword({ email, password });
-  if (error) {
-    el.loginMessage.textContent = error.message;
-    return;
-  }
-
-  const profile = await getProfile(data.user.id);
-  if (!profile) {
-    el.loginMessage.textContent = "Profile not found.";
-    return;
-  }
-
-  state.currentProfile = profile;
-  el.loginMessage.textContent = "";
-  el.loginPassword.value = "";
-  await showApp();
-
-  if (profile.must_change_password) {
-    openChangePasswordModal(true);
-  }
-}
 
   async function logout() {
     await supabaseClient.auth.signOut();
@@ -636,38 +676,47 @@ el.generateSoaBtn.addEventListener("click", generateSoa);
   alert("Password changed successfully.");
 }
 
-  async function loadAllData() {
-    const [customersRes, contactsRes, invoicesRes, invoiceItemsRes, paymentsRes, allocationsRes, logsRes, tbvsRes] = await Promise.all([
-      supabaseClient.from("customers").select("*").order("name", { ascending: true }),
-      supabaseClient.from("customer_contacts").select("*").order("created_at", { ascending: true }),
-      supabaseClient.from("invoices").select("*").order("invoice_date", { ascending: false }),
-      supabaseClient.from("invoice_items").select("*").order("created_at", { ascending: true }),
-      supabaseClient.from("payments").select("*").order("payment_date", { ascending: false }),
-      supabaseClient.from("payment_allocations").select("*"),
-      supabaseClient.from("activity_logs").select("*").order("created_at", { ascending: false }).limit(500),
-      supabaseClient.from("invoice_void_requests").select("*").order("created_at", { ascending: false })
-    ]);
+    async function loadAllData() {
+    if (!ensureSupabaseClientReady()) {
+      throw new Error(getStartupErrorMessage());
+    }
 
-    if (customersRes.error) return alert(customersRes.error.message);
-    if (contactsRes.error) return alert(contactsRes.error.message);
-    if (invoicesRes.error) return alert(invoicesRes.error.message);
-    if (invoiceItemsRes.error) return alert(invoiceItemsRes.error.message);
-    if (paymentsRes.error) return alert(paymentsRes.error.message);
-    if (allocationsRes.error) return alert(allocationsRes.error.message);
-    if (logsRes.error) return alert(logsRes.error.message);
-    if (tbvsRes.error) return alert(tbvsRes.error.message);
+    try {
+      const [customersRes, contactsRes, invoicesRes, invoiceItemsRes, paymentsRes, allocationsRes, logsRes, tbvsRes] = await Promise.all([
+        supabaseClient.from("customers").select("*").order("name", { ascending: true }),
+        supabaseClient.from("customer_contacts").select("*").order("created_at", { ascending: true }),
+        supabaseClient.from("invoices").select("*").order("invoice_date", { ascending: false }),
+        supabaseClient.from("invoice_items").select("*").order("created_at", { ascending: true }),
+        supabaseClient.from("payments").select("*").order("payment_date", { ascending: false }),
+        supabaseClient.from("payment_allocations").select("*"),
+        supabaseClient.from("activity_logs").select("*").order("created_at", { ascending: false }).limit(500),
+        supabaseClient.from("invoice_void_requests").select("*").order("created_at", { ascending: false })
+      ]);
 
-    state.customers = customersRes.data || [];
-    state.contacts = contactsRes.data || [];
-    state.invoices = invoicesRes.data || [];
-    state.invoiceItems = invoiceItemsRes.data || [];
-    state.payments = paymentsRes.data || [];
-    state.allocations = allocationsRes.data || [];
-    state.logs = logsRes.data || [];
-    state.tbvs = tbvsRes.data || [];
+      if (customersRes.error) throw new Error(customersRes.error.message);
+      if (contactsRes.error) throw new Error(contactsRes.error.message);
+      if (invoicesRes.error) throw new Error(invoicesRes.error.message);
+      if (invoiceItemsRes.error) throw new Error(invoiceItemsRes.error.message);
+      if (paymentsRes.error) throw new Error(paymentsRes.error.message);
+      if (allocationsRes.error) throw new Error(allocationsRes.error.message);
+      if (logsRes.error) throw new Error(logsRes.error.message);
+      if (tbvsRes.error) throw new Error(tbvsRes.error.message);
 
-    hydrateData();
-    populateReportCustomerFilter();
+      state.customers = customersRes.data || [];
+      state.contacts = contactsRes.data || [];
+      state.invoices = invoicesRes.data || [];
+      state.invoiceItems = invoiceItemsRes.data || [];
+      state.payments = paymentsRes.data || [];
+      state.allocations = allocationsRes.data || [];
+      state.logs = logsRes.data || [];
+      state.tbvs = tbvsRes.data || [];
+
+      hydrateData();
+      populateReportCustomerFilter();
+    } catch (error) {
+      console.error(error);
+      throw new Error(error?.message || "Could not load data from the server.");
+    }
   }
 
   function hydrateData() {
