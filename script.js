@@ -154,11 +154,12 @@ paymentViewModal: byId("paymentViewModal"),
       paymentReviewBox: byId("paymentReviewBox"),
       savePaymentBtn: byId("savePaymentBtn"),
 
-      changePasswordModal: byId("changePasswordModal"),
+            changePasswordModal: byId("changePasswordModal"),
       changePasswordTitle: byId("changePasswordTitle"),
       newOwnPassword: byId("newOwnPassword"),
       confirmOwnPassword: byId("confirmOwnPassword"),
       saveOwnPasswordBtn: byId("saveOwnPasswordBtn"),
+      closeChangePasswordModalBtn: byId("closeChangePasswordModalBtn"),
 
       execDateFrom: byId("execDateFrom"),
       execDateTo: byId("execDateTo"),
@@ -254,8 +255,9 @@ generateSoaBtn: byId("generateSoaBtn"),
     el.loginBtn.addEventListener("click", login);
     el.loginPassword.addEventListener("keydown", (e) => e.key === "Enter" && login());
 
-    el.openChangePasswordBtn.addEventListener("click", () => openChangePasswordModal(false));
+        el.openChangePasswordBtn.addEventListener("click", () => openChangePasswordModal(false));
     el.saveOwnPasswordBtn.addEventListener("click", saveOwnPassword);
+    el.closeChangePasswordModalBtn?.addEventListener("click", () => closeModal(el.changePasswordModal));
     el.logoutBtn.addEventListener("click", logout);
 
     el.navCustomers.addEventListener("click", () => setView("customers"));
