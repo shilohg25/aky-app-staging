@@ -1,0 +1,23 @@
+window.state = {
+  currentView: "customers",
+  currentProfile: null,
+  customers: [],
+  contacts: [],
+  invoices: [],
+  invoiceItems: [],
+  payments: [],
+  allocations: [],
+  logs: [],
+  tbvs: [],
+  accounts: [],
+  selectedCustomerId: null,
+  editingCustomerId: null,
+  editingInvoiceId: null,
+  paymentDraft: null,
+  selectedInvoiceForTbv: null,
+  selectedTbvForDecision: null,
+  editingAccountId: null,
+  selectedAccountForReset: null,
+    logSortField: "created_at",
+  logSortDirection: "desc"
+};
