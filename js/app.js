@@ -1549,23 +1549,7 @@ function renderCustomerContacts(customer) {
     el.lineItemsContainer.appendChild(row);
     updateInvoiceTotal();
   }
-  function getInvoiceDiscountBreakdownBox() {
-    let box = document.getElementById("invoiceDiscountBreakdown");
-
-    if (!box) {
-      box = document.createElement("div");
-      box.id = "invoiceDiscountBreakdown";
-      box.className = "info-box";
-      box.style.marginTop = "12px";
-
-      const parentPanel = el.lineItemsContainer?.parentNode;
-      if (parentPanel) {
-        parentPanel.appendChild(box);
-      }
-    }
-
-    return box;
-  }
+  
         function updateInvoiceTotal() {
     const editorState = getInvoiceEditorState();
 
@@ -5422,7 +5406,7 @@ await loadCustomerDocuments();
 setDocumentVaultStatus("Document saved successfully.", false);
 closeDocVaultPopup();
     } catch (error) {
-      setDocumentVaultStatus(docVaultEscapeHtml(error.message || "Could not save document."), true);
+            setDocumentVaultStatus(escapeHtml(error.message || "Could not save document."), true);
     } finally {
       if (saveBtn) {
         saveBtn.disabled = false;
@@ -5483,12 +5467,12 @@ window.AKY_loadCustomerDocuments = loadCustomerDocuments;
 
       return `
         <tr>
-          <td>${docVaultEscapeHtml(uploadedAt)}</td>
-          <td>${docVaultEscapeHtml(docVaultPrettyCategory(doc.category))}</td>
-          <td>${docVaultEscapeHtml(title)}</td>
-          <td>${docVaultEscapeHtml(reference)}</td>
-          <td>${docVaultEscapeHtml(source)}</td>
-          <td>${docVaultEscapeHtml(size)}</td>
+                    <td>${escapeHtml(uploadedAt)}</td>
+          <td>${escapeHtml(docVaultPrettyCategory(doc.category))}</td>
+          <td>${escapeHtml(title)}</td>
+          <td>${escapeHtml(reference)}</td>
+          <td>${escapeHtml(source)}</td>
+          <td>${escapeHtml(size)}</td>
           <td>
             <div class="doc-action-row">
               <button class="btn btn-light small-btn" type="button" data-doc-action="view" data-doc-id="${doc.id}">View</button>
@@ -5557,7 +5541,7 @@ window.AKY_loadCustomerDocuments = loadCustomerDocuments;
 
       setDocumentVaultStatus("Document deleted successfully.", false);
     } catch (error) {
-      setDocumentVaultStatus(docVaultEscapeHtml(error.message || "Could not delete document."), true);
+            setDocumentVaultStatus(escapeHtml(error.message || "Could not delete document."), true);
     }
   }
 
@@ -5604,13 +5588,5 @@ window.AKY_loadCustomerDocuments = loadCustomerDocuments;
     });
   }
 
-  function docVaultEscapeHtml(value) {
-    return String(value ?? "")
-      .replace(/&/g, "&amp;")
-      .replace(/</g, "&lt;")
-      .replace(/>/g, "&gt;")
-      .replace(/"/g, "&quot;")
-      .replace(/'/g, "&#039;");
-  }
   // ===== End Document Vault =====
 })();
