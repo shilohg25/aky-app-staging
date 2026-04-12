@@ -461,9 +461,17 @@ generateSoaBtn: byId("generateSoaBtn"),
     return state.currentProfile;
   }
 
+    function getCurrentRole() {
+    return state.currentProfile?.role || "user";
+  }
+
   function getRoleConfig() {
-    const role = state.currentProfile?.role || "user";
+    const role = getCurrentRole();
     return ROLE_PERMISSIONS[role] || ROLE_PERMISSIONS.user;
+  }
+
+  function hasRole(...allowedRoles) {
+    return allowedRoles.includes(getCurrentRole());
   }
 
   function canCreateCustomer() { return getRoleConfig().createCustomer; }
@@ -479,9 +487,10 @@ generateSoaBtn: byId("generateSoaBtn"),
   function canApproveTbv() { return getRoleConfig().approveTbv; }
   function canGenerateSoa() { return getRoleConfig().generateSoa; }
   function canManageAccounts() { return getRoleConfig().manageAccounts; }
-    function canAuthorizeCustomerDiscount() {
-    return (state.currentProfile?.role || "") === "owner";
-  }
+  function canAuthorizeCustomerDiscount() { return hasRole("owner"); }
+  function canUseAiAssist() { return hasRole("owner"); }
+  function canUploadCustomerDocuments() { return !hasRole("co-owner"); }
+  function canDeleteCustomerDocuments() { return hasRole("owner", "admin"); }
 
   function isDiscountAuthorizedCustomer(customer) {
     return !!customer?.discount_authorized;
@@ -4802,7 +4811,7 @@ function formatCompactPeso(value) {
 }
 
   async function analyzeInvoiceDocumentWithAi() {
-    if (state.currentProfile?.role !== "owner") {
+    if (!canUseAiAssist()) {
   alert("Only owner can use AI Assist.");
   return;
 }
@@ -4902,7 +4911,7 @@ function formatCompactPeso(value) {
   }
 
   async function analyzePaymentDocumentWithAi() {
-    if (state.currentProfile?.role !== "owner") {
+    if (!canUseAiAssist()) {
   alert("Only owner can use AI Assist.");
   return;
 }
@@ -5218,7 +5227,6 @@ function closeDocVaultPopup() {
 
   const customer = getSelectedCustomer();
   const customerId = customer?.id || null;
-  const role = state.currentProfile?.role || "";
 
   const uploader = document.getElementById("docVaultUploader");
   const hint = document.getElementById("docVaultCustomerHint");
@@ -5227,7 +5235,7 @@ function closeDocVaultPopup() {
 
   if (!uploader || !hint || !tableBody) return;
 
-  const canUploadStandalone = !!customerId && role !== "co-owner";
+  const canUploadStandalone = !!customerId && canUploadCustomerDocuments();
 
   if (standaloneBtn) {
     standaloneBtn.classList.toggle("hidden", !canUploadStandalone);
@@ -5333,8 +5341,7 @@ function closeDocVaultPopup() {
   }
 
   async function saveCustomerDocument() {
-    const role = state.currentProfile?.role || "";
-    if (role === "co-owner") {
+    if (!canUploadCustomerDocuments()) {
       alert("Co-owner can view documents but cannot upload.");
       return;
     }
@@ -5458,8 +5465,7 @@ window.AKY_loadCustomerDocuments = loadCustomerDocuments;
     const tableBody = document.getElementById("customerDocumentsTableBody");
     if (!tableBody) return;
 
-    const role = state.currentProfile?.role || "";
-    const canDelete = role === "owner" || role === "admin";
+    const canDelete = canDeleteCustomerDocuments();
     const docs = documentVaultState.documents || [];
 
     if (!docs.length) {
@@ -5515,8 +5521,7 @@ window.AKY_loadCustomerDocuments = loadCustomerDocuments;
   }
 
   async function deleteCustomerDocument(docId) {
-    const role = state.currentProfile?.role || "";
-    if (role !== "owner" && role !== "admin") {
+    if (!canDeleteCustomerDocuments()) {
       alert("Only owner and admin can delete documents.");
       return;
     }
