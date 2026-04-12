@@ -251,20 +251,20 @@ generateSoaBtn: byId("generateSoaBtn"),
     };
   }
 
-  function bindEvents() {
+    function bindEvents() {
     el.loginBtn.addEventListener("click", login);
     el.loginPassword.addEventListener("keydown", (e) => e.key === "Enter" && login());
 
-        el.openChangePasswordBtn.addEventListener("click", () => openChangePasswordModal(false));
-    el.saveOwnPasswordBtn.addEventListener("click", saveOwnPassword);
+    el.openChangePasswordBtn.addEventListener("click", () => openChangePasswordModal(false));
+    el.saveOwnPasswordBtn.addEventListener("click", () => runWithBusyState(el.saveOwnPasswordBtn, "Saving...", saveOwnPassword));
     el.closeChangePasswordModalBtn?.addEventListener("click", () => closeModal(el.changePasswordModal));
     el.logoutBtn.addEventListener("click", logout);
 
     el.navCustomers.addEventListener("click", () => setView("customers"));
-el.navExecutive.addEventListener("click", () => setView("executive"));
-el.navNotifications.addEventListener("click", () => setView("notifications"));
-el.navChequeRegister.addEventListener("click", () => setView("cheque-register"));
-el.navReports.addEventListener("click", () => setView("reports"));
+    el.navExecutive.addEventListener("click", () => setView("executive"));
+    el.navNotifications.addEventListener("click", () => setView("notifications"));
+    el.navChequeRegister.addEventListener("click", () => setView("cheque-register"));
+    el.navReports.addEventListener("click", () => setView("reports"));
     el.navLogs.addEventListener("click", () => setView("logs"));
     el.navAccounts.addEventListener("click", () => setView("accounts"));
 
@@ -277,20 +277,20 @@ el.navReports.addEventListener("click", () => setView("reports"));
     });
 
     el.closeCustomerModalBtn.addEventListener("click", () => closeModal(el.customerModal));
-el.customerDiscountAuthorizedInput?.addEventListener("change", renderCustomerDiscountFields);
-el.addContactBtn.addEventListener("click", () => addContactRow());
-el.saveCustomerBtn.addEventListener("click", saveCustomer);
+    el.customerDiscountAuthorizedInput?.addEventListener("change", renderCustomerDiscountFields);
+    el.addContactBtn.addEventListener("click", () => addContactRow());
+    el.saveCustomerBtn.addEventListener("click", () => runWithBusyState(el.saveCustomerBtn, "Saving...", saveCustomer));
 
     el.createInvoiceBtn.addEventListener("click", openInvoiceModalForCreate);
-el.closeInvoiceModalBtn.addEventListener("click", () => closeModal(el.invoiceModal));
-el.invoiceDiscountEnabled?.addEventListener("change", renderInvoiceDiscountControls);
-el.invoiceDiscountMode?.addEventListener("change", renderInvoiceDiscountControls);
-el.invoiceDiscountFixedAmount?.addEventListener("input", updateInvoiceTotal);
-el.addLineBtn.addEventListener("click", () => addLineItemRow());
-el.saveInvoiceBtn.addEventListener("click", saveInvoice);
+    el.closeInvoiceModalBtn.addEventListener("click", () => closeModal(el.invoiceModal));
+    el.invoiceDiscountEnabled?.addEventListener("change", renderInvoiceDiscountControls);
+    el.invoiceDiscountMode?.addEventListener("change", renderInvoiceDiscountControls);
+    el.invoiceDiscountFixedAmount?.addEventListener("input", updateInvoiceTotal);
+    el.addLineBtn.addEventListener("click", () => addLineItemRow());
+    el.saveInvoiceBtn.addEventListener("click", () => runWithBusyState(el.saveInvoiceBtn, "Saving...", saveInvoice));
 
     el.closeInvoiceViewModalBtn.addEventListener("click", () => closeModal(el.invoiceViewModal));
-el.closePaymentViewModalBtn?.addEventListener("click", () => closeModal(el.paymentViewModal));
+    el.closePaymentViewModalBtn?.addEventListener("click", () => closeModal(el.paymentViewModal));
     el.makePaymentBtn.addEventListener("click", openPaymentTypeModal);
     el.closePaymentTypeModalBtn.addEventListener("click", () => closeModal(el.paymentTypeModal));
     el.payByInvoiceBtn.addEventListener("click", openPayByInvoiceStep);
@@ -304,30 +304,13 @@ el.closePaymentViewModalBtn?.addEventListener("click", () => closeModal(el.payme
     el.partialAmountInput.addEventListener("input", renderPartialBalanceInfo);
     el.proceedPartialPaymentBtn.addEventListener("click", proceedPartialPayment);
 
-        el.closePaymentMethodModalBtn.addEventListener("click", () => closeModal(el.paymentMethodModal));
+    el.closePaymentMethodModalBtn.addEventListener("click", () => closeModal(el.paymentMethodModal));
     el.paymentMethodSelect.addEventListener("change", () => {
       renderPaymentMethodFields();
       renderPaymentReviewBox();
     });
     el.withholdingTaxAppliedInput?.addEventListener("change", renderWithholdingTaxUi);
-    el.savePaymentBtn.addEventListener("click", async () => {
-  const btn = el.savePaymentBtn;
-  if (!btn || btn.dataset.busy === "1") return;
-
-  const originalText = btn.textContent || "Finish Payment";
-
-  btn.dataset.busy = "1";
-  btn.disabled = true;
-  btn.textContent = "Saving...";
-
-  try {
-    await savePayment();
-  } finally {
-    btn.dataset.busy = "0";
-    btn.disabled = false;
-    btn.textContent = originalText;
-  }
-});
+    el.savePaymentBtn.addEventListener("click", () => runWithBusyState(el.savePaymentBtn, "Saving...", savePayment));
 
     el.applyExecFilterBtn.addEventListener("click", renderExecutiveView);
     el.clearExecFilterBtn.addEventListener("click", () => {
@@ -336,7 +319,7 @@ el.closePaymentViewModalBtn?.addEventListener("click", () => closeModal(el.payme
       renderExecutiveView();
     });
 
-        el.applyReportFilterBtn.addEventListener("click", renderReportsView);
+    el.applyReportFilterBtn.addEventListener("click", renderReportsView);
     el.clearReportFilterBtn.addEventListener("click", clearReportFilters);
     el.downloadReportBtn.addEventListener("click", downloadReportCsv);
     el.printReportBtn.addEventListener("click", printReport);
@@ -354,10 +337,10 @@ el.closePaymentViewModalBtn?.addEventListener("click", () => closeModal(el.payme
     el.denyTbvBtn.addEventListener("click", () => decideTbv("DENIED"));
 
     el.createSOABtn.addEventListener("click", openSoaModal);
-el.closeSoaModalBtn.addEventListener("click", () => closeModal(el.soaModal));
-el.soaShowPayments.addEventListener("change", renderSoaPaymentRangeVisibility);
-el.soaAsOfDate.addEventListener("change", autofillSoaPaymentRange);
-el.generateSoaBtn.addEventListener("click", generateSoa);
+    el.closeSoaModalBtn.addEventListener("click", () => closeModal(el.soaModal));
+    el.soaShowPayments.addEventListener("change", renderSoaPaymentRangeVisibility);
+    el.soaAsOfDate.addEventListener("change", autofillSoaPaymentRange);
+    el.generateSoaBtn.addEventListener("click", generateSoa);
 
     el.editCustomerBtn.addEventListener("click", openEditCustomerModal);
     el.deleteCustomerBtn.addEventListener("click", deleteSelectedCustomer);
@@ -366,22 +349,23 @@ el.generateSoaBtn.addEventListener("click", generateSoa);
     el.refreshAccountsBtn.addEventListener("click", refreshAccounts);
     el.openAccountModalBtn.addEventListener("click", openCreateAccountModal);
     el.closeAccountModalBtn.addEventListener("click", () => closeModal(el.accountModal));
-    el.saveAccountBtn.addEventListener("click", saveAccount);
+    el.saveAccountBtn.addEventListener("click", () => runWithBusyState(el.saveAccountBtn, "Saving...", saveAccount));
     el.closeResetPasswordModalBtn.addEventListener("click", () => closeModal(el.resetPasswordModal));
-    el.saveResetPasswordBtn.addEventListener("click", saveResetPassword);
+    el.saveResetPasswordBtn.addEventListener("click", () => runWithBusyState(el.saveResetPasswordBtn, "Saving...", saveResetPassword));
+
     document.querySelectorAll("#logView .sortable-th").forEach((th) => {
-  th.addEventListener("click", () => toggleLogSort(th.dataset.sort));
-});
+      th.addEventListener("click", () => toggleLogSort(th.dataset.sort));
+    });
 
     document.querySelectorAll(".modal").forEach((modal) => {
       modal.addEventListener("click", (e) => {
-        if (e.target === modal) modal.style.display = "none";
+        if (e.target === modal) closeModal(modal);
       });
     });
 
     document.addEventListener("keydown", (e) => {
       if (e.key === "Escape") {
-        document.querySelectorAll(".modal").forEach((m) => (m.style.display = "none"));
+        document.querySelectorAll(".modal").forEach((modal) => closeModal(modal));
       }
     });
 
@@ -673,7 +657,7 @@ el.generateSoaBtn.addEventListener("click", generateSoa);
 
   state.currentProfile.must_change_password = false;
   el.changePasswordModal.dataset.force = "0";
-  el.changePasswordModal.style.display = "none";
+  closeModal(el.changePasswordModal);
   renderCurrentUser();
   alert("Password changed successfully.");
 }
@@ -4480,14 +4464,39 @@ function renderLogSortIndicators() {
     }
   }
 
-  function openModal(node) { node.style.display = "flex"; }
-  function closeModal(node) {
-  if (node === el.changePasswordModal && el.changePasswordModal?.dataset?.force === "1") {
-    return;
+    async function runWithBusyState(button, busyText, work) {
+    if (!button) return work();
+    if (button.dataset.busy === "1") return;
+
+    const originalText = button.textContent || "";
+
+    button.dataset.busy = "1";
+    button.disabled = true;
+    button.textContent = busyText || originalText;
+
+    try {
+      return await work();
+    } finally {
+      button.dataset.busy = "0";
+      button.disabled = false;
+      button.textContent = originalText;
+    }
   }
 
-  node.style.display = "none";
-}
+  function openModal(node) {
+    if (!node) return;
+    node.style.display = "flex";
+  }
+
+  function closeModal(node) {
+    if (!node) return;
+
+    if (node === el.changePasswordModal && el.changePasswordModal?.dataset?.force === "1") {
+      return;
+    }
+
+    node.style.display = "none";
+  }
 
       function formatPaymentDetails(payment) {
     const details = getPaymentDetailsObject(payment);
