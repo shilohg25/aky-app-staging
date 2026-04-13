@@ -218,6 +218,7 @@ closeSoaModalBtn: byId("closeSoaModalBtn"),
 soaPreparedBy: byId("soaPreparedBy"),
 soaAsOfDate: byId("soaAsOfDate"),
 soaShowPayments: byId("soaShowPayments"),
+soaShowInvoiceParticulars: byId("soaShowInvoiceParticulars"),
 soaPaymentRangeWrap: byId("soaPaymentRangeWrap"),
 soaPaymentsFrom: byId("soaPaymentsFrom"),
 soaPaymentsTo: byId("soaPaymentsTo"),
@@ -3990,7 +3991,56 @@ function renderSoaPaymentRangeVisibility() {
   const showPayments = !!el.soaShowPayments.checked;
   el.soaPaymentRangeWrap.classList.toggle("hidden", !showPayments);
 }
-  function openSoaModal() {
+
+function getSoaInvoiceParticularsItems(invoice) {
+  if (!Array.isArray(invoice?.items)) return [];
+
+  return invoice.items.filter((item) => {
+    if (!item) return false;
+
+    const hasProductName = String(item.product_name || "").trim() !== "";
+    const hasQty = item.qty !== null && item.qty !== undefined && item.qty !== "";
+    const hasUnitPrice = item.unit_price !== null && item.unit_price !== undefined && item.unit_price !== "";
+
+    return hasProductName || hasQty || hasUnitPrice;
+  });
+}
+
+function renderSoaInvoiceParticularsRow(invoice) {
+  const items = getSoaInvoiceParticularsItems(invoice);
+
+  const itemsHtml = items.length
+    ? items.map((item) => `
+        <tr>
+          <td>${escapeHtml(item.product_name || "-")}</td>
+          <td>${formatNumber(item.qty)}</td>
+          <td>${formatPeso(item.unit_price)}</td>
+        </tr>
+      `).join("")
+    : `<tr><td colspan="3">No invoice particulars found.</td></tr>`;
+
+  return `
+    <tr class="soa-particulars-row">
+      <td colspan="8">
+        <div class="soa-particulars-wrap">
+          <strong class="soa-particulars-title">Invoice Particulars</strong>
+          <table class="soa-particulars-table">
+            <thead>
+              <tr>
+                <th>Product Name</th>
+                <th>Quantity</th>
+                <th>Price / Qty</th>
+              </tr>
+            </thead>
+            <tbody>${itemsHtml}</tbody>
+          </table>
+        </div>
+      </td>
+    </tr>
+  `;
+}
+
+function openSoaModal() {
   if (!canGenerateSoa()) return;
 
   const customer = getSelectedCustomer();
@@ -3999,6 +4049,7 @@ function renderSoaPaymentRangeVisibility() {
   el.soaPreparedBy.value = state.currentProfile?.username || state.currentProfile?.email || "";
   el.soaAsOfDate.value = todayStr();
   el.soaShowPayments.checked = true;
+  el.soaShowInvoiceParticulars.checked = false;
 
   autofillSoaPaymentRange();
   renderSoaPaymentRangeVisibility();
@@ -4006,45 +4057,104 @@ function renderSoaPaymentRangeVisibility() {
   openModal(el.soaModal);
 }
 
-  function generateSoa() {
-    const customer = getSelectedCustomer();
-    if (!customer) return;
-    const preparedBy = el.soaPreparedBy.value.trim();
-    const asOfDate = el.soaAsOfDate.value;
-    const showPayments = el.soaShowPayments.checked;
-    if (!preparedBy) return alert("Prepared By is required.");
-    if (!asOfDate) return alert("As of Date is required.");
-    const outstandingInvoices = customer.invoices.filter((i) => i.balance > 0 && i.invoice_date <= asOfDate).sort((a, b) => String(a.invoice_date).localeCompare(String(b.invoice_date)));
-    const previousPayments = customer.payments.filter((p) => p.payment_date <= asOfDate).sort((a, b) => String(a.payment_date).localeCompare(String(b.payment_date)));
-    const totalOutstanding = outstandingInvoices.reduce((sum, i) => sum + Number(i.balance || 0), 0);
-    const html = `
-      <html><head><title>Statement of Account</title><style>
-      body { font-family: Arial, sans-serif; padding: 30px; color: #111; }
-      .header { text-align: center; margin-bottom: 20px; line-height: 1.5; }
-      .header strong { font-size: 18px; }
-      h2 { text-align: center; margin: 20px 0; }
-      .meta { margin-bottom: 18px; }
-      table { width: 100%; border-collapse: collapse; font-size: 12px; margin-bottom: 18px; }
-      th, td { border: 1px solid #cfcfcf; padding: 8px; text-align: left; }
-      th { background: #f4f4f4; }
-      .total { text-align: right; font-weight: bold; margin-top: 10px; }
-      .signatures { margin-top: 50px; display: flex; justify-content: space-between; gap: 40px; }
-      .sigbox { width: 45%; }
-      .line { margin-top: 45px; border-top: 1px solid #111; padding-top: 6px; }
-      </style></head><body>
-      <div class="header"><strong>AKY GROUP OF COMPANIES, INC.</strong><br>Sitio Bantud, Brgy. Manoc-Manoc Boracay Malay, Aklan<br>Tel. (036) 288-4218 / 288-5369<br>E-mail address: akygroupofcompaniesinc@gmail.com</div>
-      <h2>STATEMENT OF ACCOUNT</h2>
-      <div class="meta"><strong>Customer:</strong> ${escapeHtml(customer.name)}<br><strong>As of Date:</strong> ${escapeHtml(asOfDate)}</div>
-      <table><thead><tr><th>Invoice Date</th><th>Invoice #</th><th>PO #</th><th>Reference</th><th>Total Amount</th><th>Paid</th><th>Outstanding</th><th>Status</th></tr></thead><tbody>
-      ${outstandingInvoices.length ? outstandingInvoices.map((i) => `<tr><td>${escapeHtml(i.invoice_date)}</td><td>${escapeHtml(i.invoice_number)}</td><td>${escapeHtml(i.po_number || "-")}</td><td>${escapeHtml(i.reference_info || "-")}</td><td>${formatPeso(i.total)}</td><td>${formatPeso(i.paidAmount)}</td><td>${formatPeso(i.balance)}</td><td>${escapeHtml(i.status)}</td></tr>`).join("") : `<tr><td colspan="8">No outstanding invoices.</td></tr>`}
-      </tbody></table>
-      ${showPayments ? `<h3>Previous Payments</h3><table><thead><tr><th>Payment Date</th><th>Type</th><th>Method</th><th>Amount</th><th>Details</th></tr></thead><tbody>${previousPayments.length ? previousPayments.map((p) => `<tr><td>${escapeHtml(p.payment_date)}</td><td>${escapeHtml(p.payment_type)}</td><td>${escapeHtml(p.method)}</td><td>${formatPeso(p.amount)}</td><td>${formatPaymentDetails(p)}</td></tr>`).join("") : `<tr><td colspan="5">No previous payments found.</td></tr>`}</tbody></table>` : ""}
-      <div class="total">TOTAL OUTSTANDING: ${formatPeso(totalOutstanding)}</div>
-      <div class="signatures"><div class="sigbox"><div><strong>Prepared by:</strong> ${escapeHtml(preparedBy)}</div></div><div class="sigbox"><div class="line">Received by:</div></div></div>
-      <script>window.onload = () => window.print();<\/script></body></html>`;
-    closeModal(el.soaModal);
-    openPrintWindow(html);
-  }
+function generateSoa() {
+  const customer = getSelectedCustomer();
+  if (!customer) return;
+
+  const preparedBy = el.soaPreparedBy.value.trim();
+  const asOfDate = el.soaAsOfDate.value;
+  const showPayments = el.soaShowPayments.checked;
+  const showInvoiceParticulars = el.soaShowInvoiceParticulars.checked;
+
+  if (!preparedBy) return alert("Prepared By is required.");
+  if (!asOfDate) return alert("As of Date is required.");
+
+  const outstandingInvoices = customer.invoices
+    .filter((invoice) => invoice.balance > 0 && invoice.invoice_date <= asOfDate)
+    .sort((a, b) => String(a.invoice_date).localeCompare(String(b.invoice_date)));
+
+  const previousPayments = customer.payments
+    .filter((payment) => payment.payment_date <= asOfDate)
+    .sort((a, b) => String(a.payment_date).localeCompare(String(b.payment_date)));
+
+  const totalOutstanding = outstandingInvoices.reduce((sum, invoice) => sum + Number(invoice.balance || 0), 0);
+
+  const outstandingInvoicesHtml = outstandingInvoices.length
+    ? outstandingInvoices.map((invoice) => `
+        <tr>
+          <td>${escapeHtml(invoice.invoice_date)}</td>
+          <td>${escapeHtml(invoice.invoice_number)}</td>
+          <td>${escapeHtml(invoice.po_number || "-")}</td>
+          <td>${escapeHtml(invoice.reference_info || "-")}</td>
+          <td>${formatPeso(invoice.total)}</td>
+          <td>${formatPeso(invoice.paidAmount)}</td>
+          <td>${formatPeso(invoice.balance)}</td>
+          <td>${escapeHtml(invoice.status)}</td>
+        </tr>
+        ${showInvoiceParticulars ? renderSoaInvoiceParticularsRow(invoice) : ""}
+      `).join("")
+    : `<tr><td colspan="8">No outstanding invoices.</td></tr>`;
+
+  const previousPaymentsHtml = previousPayments.length
+    ? previousPayments.map((payment) => `
+        <tr>
+          <td>${escapeHtml(payment.payment_date)}</td>
+          <td>${escapeHtml(payment.payment_type)}</td>
+          <td>${escapeHtml(payment.method)}</td>
+          <td>${formatPeso(payment.amount)}</td>
+          <td>${formatPaymentDetails(payment)}</td>
+        </tr>
+      `).join("")
+    : `<tr><td colspan="5">No previous payments found.</td></tr>`;
+
+  const html = `
+    <html><head><title>Statement of Account</title><style>
+    body { font-family: Arial, sans-serif; padding: 30px; color: #111; }
+    .header { text-align: center; margin-bottom: 20px; line-height: 1.5; }
+    .header strong { font-size: 18px; }
+    h2 { text-align: center; margin: 20px 0; }
+    h3 { margin: 18px 0 10px; }
+    .meta { margin-bottom: 18px; }
+    table { width: 100%; border-collapse: collapse; font-size: 12px; margin-bottom: 18px; }
+    th, td { border: 1px solid #cfcfcf; padding: 8px; text-align: left; vertical-align: top; }
+    th { background: #f4f4f4; }
+    .soa-particulars-row > td { background: #fafafa; padding: 10px; }
+    .soa-particulars-wrap { margin: 0; }
+    .soa-particulars-title { display: inline-block; margin-bottom: 8px; font-size: 12px; }
+    .soa-particulars-table { width: 100%; margin: 0; font-size: 11px; }
+    .soa-particulars-table th,
+    .soa-particulars-table td { border: 1px solid #d8d8d8; padding: 6px; }
+    .total { text-align: right; font-weight: bold; margin-top: 10px; }
+    .signatures { margin-top: 50px; display: flex; justify-content: space-between; gap: 40px; }
+    .sigbox { width: 45%; }
+    .line { margin-top: 45px; border-top: 1px solid #111; padding-top: 6px; }
+    </style></head><body>
+    <div class="header"><strong>AKY GROUP OF COMPANIES, INC.</strong><br>Sitio Bantud, Brgy. Manoc-Manoc Boracay Malay, Aklan<br>Tel. (036) 288-4218 / 288-5369<br>E-mail address: akygroupofcompaniesinc@gmail.com</div>
+    <h2>STATEMENT OF ACCOUNT</h2>
+    <div class="meta"><strong>Customer:</strong> ${escapeHtml(customer.name)}<br><strong>As of Date:</strong> ${escapeHtml(asOfDate)}</div>
+    <table>
+      <thead>
+        <tr>
+          <th>Invoice Date</th>
+          <th>Invoice #</th>
+          <th>PO #</th>
+          <th>Reference</th>
+          <th>Total Amount</th>
+          <th>Paid</th>
+          <th>Outstanding</th>
+          <th>Status</th>
+        </tr>
+      </thead>
+      <tbody>${outstandingInvoicesHtml}</tbody>
+    </table>
+    ${showPayments ? `<h3>Previous Payments</h3><table><thead><tr><th>Payment Date</th><th>Type</th><th>Method</th><th>Amount</th><th>Details</th></tr></thead><tbody>${previousPaymentsHtml}</tbody></table>` : ""}
+    <div class="total">TOTAL OUTSTANDING: ${formatPeso(totalOutstanding)}</div>
+    <div class="signatures"><div class="sigbox"><div><strong>Prepared by:</strong> ${escapeHtml(preparedBy)}</div></div><div class="sigbox"><div class="line">Received by:</div></div></div>
+    <script>window.onload = () => window.print();<\/script></body></html>`;
+
+  closeModal(el.soaModal);
+  openPrintWindow(html);
+}
 function toggleLogSort(field) {
   if (!field) return;
 
