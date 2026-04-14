@@ -381,11 +381,12 @@
     <div class="table-wrap">
       <table class="records-table">
         <thead>
-          <tr>
+                    <tr>
             <th>Payment Date</th>
             <th>Customer</th>
             <th>Cheque #</th>
             <th>Cheque Date</th>
+            <th>CR</th>
             <th>Amount</th>
             <th>Applied To</th>
             <th>Status</th>
@@ -394,7 +395,7 @@
           </tr>
         </thead>
         <tbody id="chequeRegisterTableBody">
-          <tr><td colspan="9" class="muted">Cheque Register setup complete. Rendering comes next.</td></tr>
+          <tr><td colspan="10" class="muted">Cheque Register setup complete. Rendering comes next.</td></tr>
         </tbody>
       </table>
     </div>
@@ -470,7 +471,7 @@
           <div class="table-wrap">
             <table class="records-table">
               <thead>
-                <tr>
+                                <tr>
                   <th>Customer</th>
                   <th>Invoice #</th>
                   <th>Invoice Date</th>
@@ -480,6 +481,7 @@
                   <th>Paid</th>
                   <th>Balance</th>
                   <th>Status</th>
+                  <th>Collection Receipt (CR)</th>
                   <th>Latest Paid Date</th>
                 </tr>
               </thead>
@@ -875,7 +877,7 @@
     </div>
 
     <div class="form-grid one-col">
-      <div class="field">
+            <div class="field">
         <label for="paymentMethodSelect">Payment Method *</label>
         <select id="paymentMethodSelect">
           <option value="">Select</option>
@@ -883,6 +885,11 @@
           <option value="Cheque">Cheque</option>
           <option value="Online">Online</option>
         </select>
+      </div>
+
+      <div class="field">
+        <label for="collectionReceiptInput">Collection Receipt (CR)</label>
+        <input id="collectionReceiptInput" type="text" />
       </div>
 
       <div class="panel soft-panel">
