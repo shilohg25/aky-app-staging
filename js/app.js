@@ -133,8 +133,9 @@ paymentViewModal: byId("paymentViewModal"),
       proceedPartialPaymentBtn: byId("proceedPartialPaymentBtn"),
 
             paymentMethodModal: byId("paymentMethodModal"),
-      closePaymentMethodModalBtn: byId("closePaymentMethodModalBtn"),
+            closePaymentMethodModalBtn: byId("closePaymentMethodModalBtn"),
       paymentMethodSelect: byId("paymentMethodSelect"),
+      collectionReceiptInput: byId("collectionReceiptInput"),
       chequeNumberWrap: byId("chequeNumberWrap"),
       chequeNumberInput: byId("chequeNumberInput"),
       chequeDateWrap: byId("chequeDateWrap"),
@@ -305,11 +306,12 @@ generateSoaBtn: byId("generateSoaBtn"),
     el.partialAmountInput.addEventListener("input", renderPartialBalanceInfo);
     el.proceedPartialPaymentBtn.addEventListener("click", proceedPartialPayment);
 
-    el.closePaymentMethodModalBtn.addEventListener("click", () => closeModal(el.paymentMethodModal));
+        el.closePaymentMethodModalBtn.addEventListener("click", () => closeModal(el.paymentMethodModal));
     el.paymentMethodSelect.addEventListener("change", () => {
       renderPaymentMethodFields();
       renderPaymentReviewBox();
     });
+    el.collectionReceiptInput?.addEventListener("input", renderPaymentReviewBox);
     el.withholdingTaxAppliedInput?.addEventListener("change", renderWithholdingTaxUi);
     el.savePaymentBtn.addEventListener("click", () => runWithBusyState(el.savePaymentBtn, "Saving...", savePayment));
 
@@ -2439,6 +2441,14 @@ async function saveInvoice() {
     renderPaymentReviewBox();
   }
 
+    function getPaymentCollectionReceipt(paymentOrDetails) {
+    const details = paymentOrDetails && Object.prototype.hasOwnProperty.call(paymentOrDetails, "details")
+      ? getPaymentDetailsObject(paymentOrDetails)
+      : (paymentOrDetails || {});
+
+    return String(details.collectionReceipt || "").trim();
+  }
+
   function renderPaymentReviewBox() {
     if (!state.paymentDraft) {
       el.paymentReviewBox.innerHTML = "No payment draft prepared.";
@@ -2463,7 +2473,8 @@ async function saveInvoice() {
         ? `<br>Replaces Bounced Cheque: <strong>${escapeHtml(state.paymentDraft.replacementOfChequeNumber || "-")}</strong>`
         : "";
 
-    const method = el.paymentMethodSelect.value || "Not selected yet";
+        const method = el.paymentMethodSelect.value || "Not selected yet";
+    const collectionReceipt = el.collectionReceiptInput?.value.trim() || "Not provided";
     const withholdingApplied = !!el.withholdingTaxAppliedInput?.checked;
     const breakdown = computeWithholdingTaxBreakdown(state.paymentDraft.amount);
 
@@ -2478,9 +2489,10 @@ async function saveInvoice() {
         <br>Withholding Tax: <strong>Not Applied</strong>
       `;
 
-    el.paymentReviewBox.innerHTML = `
+        el.paymentReviewBox.innerHTML = `
       Payment Type: <strong>${paymentTypeLabel}</strong><br>
       Method: <strong>${escapeHtml(method)}</strong><br>
+      Collection Receipt (CR): <strong>${escapeHtml(collectionReceipt)}</strong><br>
       Applied To: ${escapeHtml(lines.join(" | "))}${replacementInfo}
       ${taxHtml}
     `;
@@ -2676,10 +2688,11 @@ async function saveInvoice() {
 
   initPaymentDocumentFlow();
 
-  function openPaymentMethodStep() {
+    function openPaymentMethodStep() {
     if (!state.paymentDraft) return;
 
     el.paymentMethodSelect.value = "";
+    if (el.collectionReceiptInput) el.collectionReceiptInput.value = "";
     el.chequeNumberInput.value = "";
     el.chequeDateInput.value = todayStr();
     el.chequePostDatedInput.checked = false;
@@ -2718,7 +2731,8 @@ async function saveInvoice() {
     const withholdingApplied = !!el.withholdingTaxAppliedInput?.checked;
     const withholdingBreakdown = computeWithholdingTaxBreakdown(amount);
 
-    const details = {
+        const details = {
+      collectionReceipt: el.collectionReceiptInput?.value.trim() || null,
       grossReceivedAmount: amount,
       withholdingTaxApplied: withholdingApplied,
       withholdingTaxRate: withholdingApplied ? withholdingBreakdown.taxRate : 0,
@@ -2915,9 +2929,13 @@ async function saveInvoice() {
           <span>Bank / Platform</span>
           <strong>${escapeHtml(details.platformName || details.bankAccountNumber || "-")}</strong>
         </div>
-        <div class="invoice-meta-card">
+                <div class="invoice-meta-card">
           <span>Reference / Cheque #</span>
           <strong>${escapeHtml(details.referenceNumber || details.chequeNumber || "-")}</strong>
+        </div>
+        <div class="invoice-meta-card">
+          <span>Collection Receipt (CR)</span>
+          <strong>${escapeHtml(getPaymentCollectionReceipt(details) || "-")}</strong>
         </div>
         <div class="invoice-meta-card">
           <span>Cheque Date</span>
@@ -3509,8 +3527,8 @@ el.execOutstanding.textContent = formatCompactPeso(
     const entries = getChequeRegisterEntries();
     el.chequeRegisterTableBody.innerHTML = "";
 
-    if (!entries.length) {
-      el.chequeRegisterTableBody.innerHTML = `<tr><td colspan="9" class="muted">No cheque payments found.</td></tr>`;
+        if (!entries.length) {
+      el.chequeRegisterTableBody.innerHTML = `<tr><td colspan="10" class="muted">No cheque payments found.</td></tr>`;
       return;
     }
 
@@ -3559,11 +3577,12 @@ el.execOutstanding.textContent = formatCompactPeso(
           : `<span class="muted">${escapeHtml(replacementState.buttonLabel)}</span>`;
       }
 
-      row.innerHTML = `
+            row.innerHTML = `
         <td>${escapeHtml(payment.payment_date || "-")}</td>
         <td>${escapeHtml(customer?.name || "-")}</td>
         <td>${escapeHtml(details.chequeNumber || "-")}</td>
         <td>${escapeHtml(details.chequeDate || "-")}</td>
+        <td>${escapeHtml(getPaymentCollectionReceipt(details) || "-")}</td>
         <td>${formatPeso(payment.amount)}</td>
         <td>${escapeHtml(appliedTo || "-")}</td>
         <td>${statusHtml}</td>
@@ -3710,15 +3729,23 @@ el.execOutstanding.textContent = formatCompactPeso(
     const sortMode = el.reportInvoiceNumberSort?.value || "date_desc";
     const invoiceNumberCollator = new Intl.Collator(undefined, { numeric: true, sensitivity: "base" });
 
-    return getActiveInvoices().map((invoice) => {
+        return getActiveInvoices().map((invoice) => {
       const customer = state.customers.find((c) => c.id === invoice.customer_id);
-      const paymentDates = state.allocations
+      const invoicePayments = state.allocations
         .filter((a) => a.invoice_id === invoice.id)
         .map((a) => state.payments.find((p) => p.id === a.payment_id))
-        .filter((payment) => payment && isOperationallyCollectedPayment(payment))
+        .filter((payment) => payment && isOperationallyCollectedPayment(payment));
+
+      const paymentDates = invoicePayments
         .map((payment) => payment.payment_date)
         .filter(Boolean)
         .sort();
+
+      const collectionReceipt = Array.from(new Set(
+        invoicePayments
+          .map((payment) => getPaymentCollectionReceipt(payment))
+          .filter(Boolean)
+      )).join(", ");
 
       const latestPaidDate = paymentDates.length ? paymentDates[paymentDates.length - 1] : "";
 
@@ -3733,6 +3760,7 @@ el.execOutstanding.textContent = formatCompactPeso(
         paid: Number(invoice.paidAmount || 0),
         balance: Number(invoice.balance || 0),
         status: invoice.status,
+        collectionReceipt,
         latestPaidDate
       };
     }).filter((row) => {
@@ -3776,12 +3804,13 @@ el.execOutstanding.textContent = formatCompactPeso(
     el.reportTotalPaid.textContent = formatPeso(rows.reduce((sum, x) => sum + x.paid, 0));
     el.reportTotalOutstanding.textContent = formatPeso(rows.reduce((sum, x) => sum + x.balance, 0));
     if (!rows.length) {
-      el.reportsTableBody.innerHTML = `<tr><td colspan="10" class="muted">No records found.</td></tr>`;
+          if (!rows.length) {
+      el.reportsTableBody.innerHTML = `<tr><td colspan="11" class="muted">No records found.</td></tr>`;
       return;
     }
     rows.forEach((row) => {
       const tr = document.createElement("tr");
-      tr.innerHTML = `
+            tr.innerHTML = `
         <td>${escapeHtml(row.customerName)}</td>
         <td>${escapeHtml(row.invoiceNumber)}</td>
         <td>${escapeHtml(row.invoiceDate)}</td>
@@ -3791,6 +3820,7 @@ el.execOutstanding.textContent = formatCompactPeso(
         <td>${formatPeso(row.paid)}</td>
         <td>${formatPeso(row.balance)}</td>
         <td>${statusPill(row.status)}</td>
+        <td>${escapeHtml(row.collectionReceipt || "-")}</td>
         <td>${escapeHtml(row.latestPaidDate || "-")}</td>
       `;
       el.reportsTableBody.appendChild(tr);
@@ -3871,14 +3901,14 @@ el.execOutstanding.textContent = formatCompactPeso(
     openPrintWindow(html);
   }
 
-  function downloadReportCsv() {
+    function downloadReportCsv() {
     const rows = getReportRows();
-    const headers = ["Customer", "Invoice #", "Invoice Date", "PO #", "Reference", "Total", "Paid", "Balance", "Status", "Latest Paid Date"];
-    const csv = [headers.join(","), ...rows.map((r) => [csvSafe(r.customerName), csvSafe(r.invoiceNumber), csvSafe(r.invoiceDate), csvSafe(r.poNumber), csvSafe(r.referenceInfo), r.total, r.paid, r.balance, csvSafe(r.status), csvSafe(r.latestPaidDate)].join(","))].join("\n");
+    const headers = ["Customer", "Invoice #", "Invoice Date", "PO #", "Reference", "Total", "Paid", "Balance", "Status", "Collection Receipt (CR)", "Latest Paid Date"];
+    const csv = [headers.join(","), ...rows.map((r) => [csvSafe(r.customerName), csvSafe(r.invoiceNumber), csvSafe(r.invoiceDate), csvSafe(r.poNumber), csvSafe(r.referenceInfo), r.total, r.paid, r.balance, csvSafe(r.status), csvSafe(r.collectionReceipt), csvSafe(r.latestPaidDate)].join(","))].join("\n");
     downloadTextFile(`AKY_Report_${todayStr()}.csv`, csv, "text/csv;charset=utf-8");
   }
 
-  function printReport() {
+    function printReport() {
     const rows = getReportRows();
     const html = `
       <html><head><title>AKY Report</title><style>
@@ -3892,10 +3922,10 @@ el.execOutstanding.textContent = formatCompactPeso(
       <h1>AKY Report</h1>
       <div class="meta">Generated on ${new Date().toLocaleString()}</div>
       <table><thead><tr>
-      <th>Customer</th><th>Invoice #</th><th>Invoice Date</th><th>PO #</th><th>Reference</th><th>Total</th><th>Paid</th><th>Balance</th><th>Status</th><th>Latest Paid Date</th>
+      <th>Customer</th><th>Invoice #</th><th>Invoice Date</th><th>PO #</th><th>Reference</th><th>Total</th><th>Paid</th><th>Balance</th><th>Status</th><th>Collection Receipt (CR)</th><th>Latest Paid Date</th>
       </tr></thead><tbody>
       ${rows.map((r) => `
-        <tr><td>${escapeHtml(r.customerName)}</td><td>${escapeHtml(r.invoiceNumber)}</td><td>${escapeHtml(r.invoiceDate)}</td><td>${escapeHtml(r.poNumber || "-")}</td><td>${escapeHtml(r.referenceInfo || "-")}</td><td>${formatPeso(r.total)}</td><td>${formatPeso(r.paid)}</td><td>${formatPeso(r.balance)}</td><td>${escapeHtml(r.status)}</td><td>${escapeHtml(r.latestPaidDate || "-")}</td></tr>
+        <tr><td>${escapeHtml(r.customerName)}</td><td>${escapeHtml(r.invoiceNumber)}</td><td>${escapeHtml(r.invoiceDate)}</td><td>${escapeHtml(r.poNumber || "-")}</td><td>${escapeHtml(r.referenceInfo || "-")}</td><td>${formatPeso(r.total)}</td><td>${formatPeso(r.paid)}</td><td>${formatPeso(r.balance)}</td><td>${escapeHtml(r.status)}</td><td>${escapeHtml(r.collectionReceipt || "-")}</td><td>${escapeHtml(r.latestPaidDate || "-")}</td></tr>
       `).join("")}
       </tbody></table><script>window.onload = () => window.print();<\/script></body></html>`;
     openPrintWindow(html);
@@ -4617,7 +4647,7 @@ function renderLogSortIndicators() {
     node.style.display = "none";
   }
 
-      function formatPaymentDetails(payment) {
+            function formatPaymentDetails(payment) {
     const details = getPaymentDetailsObject(payment);
 
     const replacementText = details.isReplacementPayment
@@ -4632,19 +4662,23 @@ function renderLogSortIndicators() {
       ? ` | WTax: ${formatPeso(details.withholdingTaxAmount || 0)} | Net: ${formatPeso(details.netReceivedAmount ?? payment.amount ?? 0)}`
       : "";
 
+    const collectionReceiptText = getPaymentCollectionReceipt(details)
+      ? ` | CR: ${getPaymentCollectionReceipt(details)}`
+      : "";
+
     if (payment.method === "Cash") {
-      return escapeHtml(`Deposit to: ${details.bankAccountNumber || "-"}${replacementText}${rootText}${taxText}`);
+      return escapeHtml(`Deposit to: ${details.bankAccountNumber || "-"}${collectionReceiptText}${replacementText}${rootText}${taxText}`);
     }
 
     if (payment.method === "Online") {
-      return escapeHtml(`Ref: ${details.referenceNumber || "-"} | ${details.platformName || "-"}${replacementText}${rootText}${taxText}`);
+      return escapeHtml(`Ref: ${details.referenceNumber || "-"} | ${details.platformName || "-"}${collectionReceiptText}${replacementText}${rootText}${taxText}`);
     }
 
     if (payment.method === "Cheque") {
-      return escapeHtml(`Cheque #: ${details.chequeNumber || "-"} | Date: ${details.chequeDate || "-"}${details.isPostDated ? " | Post-Dated" : ""}${replacementText}${rootText}${taxText}`);
+      return escapeHtml(`Cheque #: ${details.chequeNumber || "-"} | Date: ${details.chequeDate || "-"}${details.isPostDated ? " | Post-Dated" : ""}${collectionReceiptText}${replacementText}${rootText}${taxText}`);
     }
 
-    const fallbackText = `${replacementText}${rootText}${taxText}`.replace(/^ \| /, "");
+    const fallbackText = `${collectionReceiptText}${replacementText}${rootText}${taxText}`.replace(/^ \| /, "");
     return fallbackText ? escapeHtml(fallbackText) : "-";
   }
 
