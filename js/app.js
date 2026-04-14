@@ -3796,21 +3796,22 @@ el.execOutstanding.textContent = formatCompactPeso(
     });
   }
 
-  function renderReportsView() {
+    function renderReportsView() {
     const rows = getReportRows();
     el.reportsTableBody.innerHTML = "";
     el.reportInvoicesCount.textContent = String(rows.length);
     el.reportTotalInvoiced.textContent = formatPeso(rows.reduce((sum, x) => sum + x.total, 0));
     el.reportTotalPaid.textContent = formatPeso(rows.reduce((sum, x) => sum + x.paid, 0));
     el.reportTotalOutstanding.textContent = formatPeso(rows.reduce((sum, x) => sum + x.balance, 0));
+
     if (!rows.length) {
-          if (!rows.length) {
       el.reportsTableBody.innerHTML = `<tr><td colspan="11" class="muted">No records found.</td></tr>`;
       return;
     }
+
     rows.forEach((row) => {
       const tr = document.createElement("tr");
-            tr.innerHTML = `
+      tr.innerHTML = `
         <td>${escapeHtml(row.customerName)}</td>
         <td>${escapeHtml(row.invoiceNumber)}</td>
         <td>${escapeHtml(row.invoiceDate)}</td>
