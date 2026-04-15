@@ -1999,7 +1999,40 @@ async function saveInvoice() {
 
   alert(`Invoice saved successfully.${documentMessage}`);
 }
+  function selectCustomerContext(customerId) {
+  if (!customerId) return null;
 
+  const customer = state.customers.find((item) => item.id === customerId) || null;
+  if (!customer) return null;
+
+  if (state.selectedCustomerId !== customer.id) {
+    state.selectedCustomerId = customer.id;
+    renderCustomerList();
+    renderCurrentCustomerDashboard();
+  }
+
+  return customer;
+}
+
+  function openReportInvoiceDetails(customerId, invoiceId) {
+  const customer = selectCustomerContext(customerId);
+  if (!customer || !invoiceId) return;
+
+  const invoice = customer.invoices.find((item) => item.id === invoiceId);
+  if (!invoice) return;
+
+  viewInvoice(invoice.id);
+}
+
+  function openReportPaymentDetails(customerId, paymentId) {
+  const customer = selectCustomerContext(customerId);
+  if (!customer || !paymentId) return;
+
+  const payment = customer.payments.find((item) => item.id === paymentId);
+  if (!payment) return;
+
+  viewPayment(payment.id);
+}
   function viewInvoice(invoiceId) {
   const customer = getSelectedCustomer();
   if (!customer) return;
@@ -3747,11 +3780,19 @@ el.execOutstanding.textContent = formatCompactPeso(
           .filter(Boolean)
       )).join(", ");
 
-      const latestPaidDate = paymentDates.length ? paymentDates[paymentDates.length - 1] : "";
+            const latestPaidDate = paymentDates.length ? paymentDates[paymentDates.length - 1] : "";
+      const latestCollectedPayment = invoicePayments
+        .slice()
+        .sort((a, b) => {
+          const paymentDateCompare = String(b?.payment_date || "").localeCompare(String(a?.payment_date || ""));
+          if (paymentDateCompare !== 0) return paymentDateCompare;
+          return String(b?.created_at || "").localeCompare(String(a?.created_at || ""));
+        })[0] || null;
 
       return {
         customerId: customer?.id || "",
         customerName: customer?.name || "-",
+        invoiceId: invoice.id,
         invoiceNumber: invoice.invoice_number || "",
         invoiceDate: invoice.invoice_date || "",
         poNumber: invoice.po_number || "",
@@ -3761,7 +3802,8 @@ el.execOutstanding.textContent = formatCompactPeso(
         balance: Number(invoice.balance || 0),
         status: invoice.status,
         collectionReceipt,
-        latestPaidDate
+        latestPaidDate,
+        latestCollectedPaymentId: latestCollectedPayment?.id || ""
       };
     }).filter((row) => {
       const customerId = el.reportCustomerFilter.value;
@@ -3809,11 +3851,16 @@ el.execOutstanding.textContent = formatCompactPeso(
       return;
     }
 
-    rows.forEach((row) => {
+        rows.forEach((row) => {
       const tr = document.createElement("tr");
+      const canOpenPaymentDetails = row.status === "Paid" && !!row.latestCollectedPaymentId;
+      const latestPaidDateCellHtml = canOpenPaymentDetails
+        ? `${escapeHtml(row.latestPaidDate || "-")}<br><span class="clickable report-payment-link">View Payment Details</span>`
+        : escapeHtml(row.latestPaidDate || "-");
+
       tr.innerHTML = `
         <td>${escapeHtml(row.customerName)}</td>
-        <td>${escapeHtml(row.invoiceNumber)}</td>
+        <td><span class="clickable report-invoice-link">${escapeHtml(row.invoiceNumber)}</span></td>
         <td>${escapeHtml(row.invoiceDate)}</td>
         <td>${escapeHtml(row.poNumber || "-")}</td>
         <td>${escapeHtml(row.referenceInfo || "-")}</td>
@@ -3822,8 +3869,17 @@ el.execOutstanding.textContent = formatCompactPeso(
         <td>${formatPeso(row.balance)}</td>
         <td>${statusPill(row.status)}</td>
         <td>${escapeHtml(row.collectionReceipt || "-")}</td>
-        <td>${escapeHtml(row.latestPaidDate || "-")}</td>
+        <td>${latestPaidDateCellHtml}</td>
       `;
+
+      tr.querySelector(".report-invoice-link")?.addEventListener("click", () => {
+        openReportInvoiceDetails(row.customerId, row.invoiceId);
+      });
+
+      tr.querySelector(".report-payment-link")?.addEventListener("click", () => {
+        openReportPaymentDetails(row.customerId, row.latestCollectedPaymentId);
+      });
+
       el.reportsTableBody.appendChild(tr);
     });
   }
