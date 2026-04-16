@@ -181,7 +181,7 @@ paymentViewModal: byId("paymentViewModal"),
       printTbvReportBtn: byId("printTbvReportBtn"),
       notificationsOverdueBody: byId("notificationsOverdueBody"),
 
-      reportCustomerFilter: byId("reportCustomerFilter"),
+            reportCustomerFilter: byId("reportCustomerFilter"),
       reportInvoiceDateFrom: byId("reportInvoiceDateFrom"),
       reportInvoiceDateTo: byId("reportInvoiceDateTo"),
       reportPaidDateFrom: byId("reportPaidDateFrom"),
@@ -197,6 +197,21 @@ paymentViewModal: byId("paymentViewModal"),
       reportTotalInvoiced: byId("reportTotalInvoiced"),
       reportTotalPaid: byId("reportTotalPaid"),
       reportTotalOutstanding: byId("reportTotalOutstanding"),
+      paymentReportCustomerFilter: byId("paymentReportCustomerFilter"),
+      paymentReportDateFrom: byId("paymentReportDateFrom"),
+      paymentReportDateTo: byId("paymentReportDateTo"),
+      paymentReportMethodFilter: byId("paymentReportMethodFilter"),
+      paymentReportStatusFilter: byId("paymentReportStatusFilter"),
+      applyPaymentReportFilterBtn: byId("applyPaymentReportFilterBtn"),
+      clearPaymentReportFilterBtn: byId("clearPaymentReportFilterBtn"),
+      downloadPaymentReportBtn: byId("downloadPaymentReportBtn"),
+      printPaymentReportBtn: byId("printPaymentReportBtn"),
+      paymentReportsTableBody: byId("paymentReportsTableBody"),
+      paymentReportCount: byId("paymentReportCount"),
+      paymentReportGrossTotal: byId("paymentReportGrossTotal"),
+      paymentReportClearedTotal: byId("paymentReportClearedTotal"),
+      paymentReportPendingTotal: byId("paymentReportPendingTotal"),
+      paymentReportBouncedTotal: byId("paymentReportBouncedTotal"),
 
       logTableBody: byId("logTableBody"),
 chequeRegisterTableBody: byId("chequeRegisterTableBody"),
@@ -322,10 +337,14 @@ generateSoaBtn: byId("generateSoaBtn"),
       renderExecutiveView();
     });
 
-    el.applyReportFilterBtn.addEventListener("click", renderReportsView);
+        el.applyReportFilterBtn.addEventListener("click", renderReportsView);
     el.clearReportFilterBtn.addEventListener("click", clearReportFilters);
     el.downloadReportBtn.addEventListener("click", downloadReportCsv);
     el.printReportBtn.addEventListener("click", printReport);
+    el.applyPaymentReportFilterBtn?.addEventListener("click", renderPaymentReceivedReportView);
+    el.clearPaymentReportFilterBtn?.addEventListener("click", clearPaymentReportFilters);
+    el.downloadPaymentReportBtn?.addEventListener("click", downloadPaymentReportCsv);
+    el.printPaymentReportBtn?.addEventListener("click", printPaymentReceivedReport);
 
     el.notificationTbvStatusFilter?.addEventListener("change", renderTbvRequestsTable);
     el.notificationTbvInvoiceSearch?.addEventListener("input", renderTbvRequestsTable);
@@ -3754,8 +3773,24 @@ el.execOutstanding.textContent = formatCompactPeso(
     }
   }
 
+    function buildCustomerFilterOptionsHtml() {
+    return `<option value="">All Customers</option>` + state.customers
+      .slice()
+      .sort((a, b) => a.name.localeCompare(b.name))
+      .map((c) => `<option value="${c.id}">${escapeHtml(c.name)}</option>`)
+      .join("");
+  }
+
   function populateReportCustomerFilter() {
-    el.reportCustomerFilter.innerHTML = `<option value="">All Customers</option>` + state.customers.slice().sort((a, b) => a.name.localeCompare(b.name)).map((c) => `<option value="${c.id}">${escapeHtml(c.name)}</option>`).join("");
+    const optionsHtml = buildCustomerFilterOptionsHtml();
+
+    if (el.reportCustomerFilter) {
+      el.reportCustomerFilter.innerHTML = optionsHtml;
+    }
+
+    if (el.paymentReportCustomerFilter) {
+      el.paymentReportCustomerFilter.innerHTML = optionsHtml;
+    }
   }
 
     function getReportRows() {
@@ -3838,7 +3873,7 @@ el.execOutstanding.textContent = formatCompactPeso(
     });
   }
 
-    function renderReportsView() {
+      function renderReportsView() {
     const rows = getReportRows();
     el.reportsTableBody.innerHTML = "";
     el.reportInvoicesCount.textContent = String(rows.length);
@@ -3848,10 +3883,11 @@ el.execOutstanding.textContent = formatCompactPeso(
 
     if (!rows.length) {
       el.reportsTableBody.innerHTML = `<tr><td colspan="11" class="muted">No records found.</td></tr>`;
+      renderPaymentReceivedReportView();
       return;
     }
 
-        rows.forEach((row) => {
+    rows.forEach((row) => {
       const tr = document.createElement("tr");
       const canOpenPaymentDetails = row.status === "Paid" && !!row.latestCollectedPaymentId;
       const latestPaidDateCellHtml = canOpenPaymentDetails
@@ -3882,9 +3918,11 @@ el.execOutstanding.textContent = formatCompactPeso(
 
       el.reportsTableBody.appendChild(tr);
     });
+
+    renderPaymentReceivedReportView();
   }
 
-    function clearReportFilters() {
+      function clearReportFilters() {
     el.reportCustomerFilter.value = "";
     el.reportInvoiceDateFrom.value = "";
     el.reportInvoiceDateTo.value = "";
@@ -3893,6 +3931,357 @@ el.execOutstanding.textContent = formatCompactPeso(
     el.reportStatusFilter.value = "";
     if (el.reportInvoiceNumberSort) el.reportInvoiceNumberSort.value = "date_desc";
     renderReportsView();
+  }
+
+  function getPaymentReceivedStatusInfo(payment) {
+    if (payment?.method === "Cheque") {
+      const chequeStatus = getChequeStatus(payment);
+
+      if (chequeStatus === "Cleared") {
+        return {
+          filterValue: "COLLECTED",
+          label: "Cleared Cheque",
+          pillHtml: `<span class="status-pill status-paid">Cleared Cheque</span>`
+        };
+      }
+
+      if (chequeStatus === "Bounced") {
+        return {
+          filterValue: "BOUNCED",
+          label: "Bounced Cheque",
+          pillHtml: `<span class="notice-pill notice-pending">Bounced Cheque</span>`
+        };
+      }
+
+      return {
+        filterValue: "PENDING",
+        label: "Pending Cheque",
+        pillHtml: `<span class="notice-pill notice-postdated">Pending Cheque</span>`
+      };
+    }
+
+    if (payment?.cleared === false) {
+      return {
+        filterValue: "PENDING",
+        label: "Pending",
+        pillHtml: `<span class="notice-pill notice-postdated">Pending</span>`
+      };
+    }
+
+    return {
+      filterValue: "COLLECTED",
+      label: "Collected",
+      pillHtml: `<span class="status-pill status-paid">Collected</span>`
+    };
+  }
+
+  function getPaymentReportReferenceDisplay(payment, details) {
+    if (payment.method === "Cash") {
+      return details.bankAccountNumber || "-";
+    }
+
+    if (payment.method === "Online") {
+      const parts = [details.referenceNumber || "-", details.platformName || ""].filter(Boolean);
+      return parts.join(" | ") || "-";
+    }
+
+    if (payment.method === "Cheque") {
+      return details.chequeNumber || "-";
+    }
+
+    return "-";
+  }
+
+  function getPaymentReportResolvedDateDisplay(details, statusInfo) {
+    if (statusInfo.filterValue === "COLLECTED" && details.clearedAt) {
+      return formatDateTime(details.clearedAt);
+    }
+
+    if (statusInfo.filterValue === "BOUNCED" && details.bouncedAt) {
+      return formatDateTime(details.bouncedAt);
+    }
+
+    return "-";
+  }
+
+  function getPaymentReportNotes(payment, details, statusInfo) {
+    const notes = [];
+
+    if (payment.method === "Cheque" && details.chequeDate) {
+      notes.push(`Cheque Date: ${details.chequeDate}`);
+    }
+
+    if (details.isPostDated) {
+      notes.push("Post-Dated");
+    }
+
+    if (statusInfo.filterValue === "PENDING") {
+      notes.push("Excluded from cleared total");
+    }
+
+    if (statusInfo.filterValue === "BOUNCED") {
+      notes.push("Excluded from cleared total");
+      if (details.bounceReason) {
+        notes.push(`Bounce Reason: ${details.bounceReason}`);
+      }
+    }
+
+    return notes.join(" | ") || "-";
+  }
+
+  function getPaymentReceivedReportRows() {
+    const customerId = el.paymentReportCustomerFilter?.value || "";
+    const paymentDateFrom = el.paymentReportDateFrom?.value || null;
+    const paymentDateTo = el.paymentReportDateTo?.value || null;
+    const methodFilter = el.paymentReportMethodFilter?.value || "";
+    const statusFilter = el.paymentReportStatusFilter?.value || "";
+
+    return state.payments
+      .map((payment) => {
+        const details = getPaymentDetailsObject(payment);
+        const customer = state.customers.find((c) => c.id === payment.customer_id);
+        const statusInfo = getPaymentReceivedStatusInfo(payment);
+        const appliedTo = (payment.allocations || [])
+          .map((alloc) => {
+            const invoice = state.invoices.find((inv) => inv.id === alloc.invoice_id);
+            return `${getInvoiceReferenceLabel(invoice)} (${formatPeso(getAllocationAmount(alloc))})`;
+          })
+          .join(", ");
+
+        return {
+          paymentId: payment.id,
+          customerId: customer?.id || "",
+          customerName: customer?.name || "-",
+          paymentDate: payment.payment_date || "",
+          paymentType: getPaymentTypeLabel(payment),
+          method: payment.method || "-",
+          referenceDisplay: getPaymentReportReferenceDisplay(payment, details),
+          amount: Number(payment.amount || 0),
+          statusFilterValue: statusInfo.filterValue,
+          statusLabel: statusInfo.label,
+          statusPillHtml: statusInfo.pillHtml,
+          appliedTo: appliedTo || "-",
+          collectionReceipt: getPaymentCollectionReceipt(payment) || "-",
+          resolvedDateDisplay: getPaymentReportResolvedDateDisplay(details, statusInfo),
+          notes: getPaymentReportNotes(payment, details, statusInfo)
+        };
+      })
+      .filter((row) => {
+        if (customerId && row.customerId !== customerId) return false;
+        if (paymentDateFrom && row.paymentDate < paymentDateFrom) return false;
+        if (paymentDateTo && row.paymentDate > paymentDateTo) return false;
+        if (methodFilter && row.method !== methodFilter) return false;
+        if (statusFilter && row.statusFilterValue !== statusFilter) return false;
+        return true;
+      })
+      .sort((a, b) => {
+        const paymentDateCompare = String(b.paymentDate || "").localeCompare(String(a.paymentDate || ""));
+        if (paymentDateCompare !== 0) return paymentDateCompare;
+        return String(b.paymentId || "").localeCompare(String(a.paymentId || ""));
+      });
+  }
+
+  function renderPaymentReceivedReportView() {
+    if (!el.paymentReportsTableBody) return;
+
+    const rows = getPaymentReceivedReportRows();
+    const grossTotal = rows.reduce((sum, row) => sum + row.amount, 0);
+    const clearedTotal = rows
+      .filter((row) => row.statusFilterValue === "COLLECTED")
+      .reduce((sum, row) => sum + row.amount, 0);
+    const pendingTotal = rows
+      .filter((row) => row.statusFilterValue === "PENDING")
+      .reduce((sum, row) => sum + row.amount, 0);
+    const bouncedTotal = rows
+      .filter((row) => row.statusFilterValue === "BOUNCED")
+      .reduce((sum, row) => sum + row.amount, 0);
+
+    el.paymentReportCount.textContent = String(rows.length);
+    el.paymentReportGrossTotal.textContent = formatPeso(grossTotal);
+    el.paymentReportClearedTotal.textContent = formatPeso(clearedTotal);
+    el.paymentReportPendingTotal.textContent = formatPeso(pendingTotal);
+    el.paymentReportBouncedTotal.textContent = formatPeso(bouncedTotal);
+    el.paymentReportsTableBody.innerHTML = "";
+
+    if (!rows.length) {
+      el.paymentReportsTableBody.innerHTML = `<tr><td colspan="11" class="muted">No payment records found.</td></tr>`;
+      return;
+    }
+
+    rows.forEach((row) => {
+      const tr = document.createElement("tr");
+      tr.innerHTML = `
+        <td>${escapeHtml(row.paymentDate || "-")}</td>
+        <td>${escapeHtml(row.customerName)}</td>
+        <td>${escapeHtml(row.paymentType)}</td>
+        <td>${escapeHtml(row.method)}</td>
+        <td>${escapeHtml(row.referenceDisplay)}</td>
+        <td>${formatPeso(row.amount)}</td>
+        <td>${row.statusPillHtml}</td>
+        <td>${escapeHtml(row.appliedTo)}</td>
+        <td>${escapeHtml(row.collectionReceipt)}</td>
+        <td>${escapeHtml(row.resolvedDateDisplay)}</td>
+        <td>${escapeHtml(row.notes)}</td>
+      `;
+      el.paymentReportsTableBody.appendChild(tr);
+    });
+  }
+
+  function clearPaymentReportFilters() {
+    if (el.paymentReportCustomerFilter) el.paymentReportCustomerFilter.value = "";
+    if (el.paymentReportDateFrom) el.paymentReportDateFrom.value = "";
+    if (el.paymentReportDateTo) el.paymentReportDateTo.value = "";
+    if (el.paymentReportMethodFilter) el.paymentReportMethodFilter.value = "";
+    if (el.paymentReportStatusFilter) el.paymentReportStatusFilter.value = "";
+    renderPaymentReceivedReportView();
+  }
+
+  function buildPaymentReportCsvRows(rows) {
+    const headers = [
+      "Payment Date",
+      "Customer",
+      "Type",
+      "Method",
+      "Reference",
+      "Gross Amount",
+      "Status",
+      "Applied To",
+      "Collection Receipt (CR)",
+      "Resolved Date",
+      "Notes"
+    ];
+
+    return [
+      headers.join(","),
+      ...rows.map((row) => [
+        csvSafe(row.paymentDate),
+        csvSafe(row.customerName),
+        csvSafe(row.paymentType),
+        csvSafe(row.method),
+        csvSafe(row.referenceDisplay),
+        row.amount,
+        csvSafe(row.statusLabel),
+        csvSafe(row.appliedTo),
+        csvSafe(row.collectionReceipt),
+        csvSafe(row.resolvedDateDisplay),
+        csvSafe(row.notes)
+      ].join(","))
+    ].join("\n");
+  }
+
+  function downloadPaymentReportCsv() {
+    const rows = getPaymentReceivedReportRows();
+    if (!rows.length) return alert("No payment rows to export.");
+
+    const csv = buildPaymentReportCsvRows(rows);
+    downloadTextFile(`AKY_Payment_Received_Report_${todayStr()}.csv`, csv, "text/csv;charset=utf-8");
+  }
+
+  function buildPaymentReportSectionHtml(title, subtitle, rows) {
+    if (!rows.length) {
+      return `
+        <h2>${escapeHtml(title)}</h2>
+        <div class="section-note">${escapeHtml(subtitle)}</div>
+        <div class="empty-row">No records in this section.</div>
+      `;
+    }
+
+    return `
+      <h2>${escapeHtml(title)}</h2>
+      <div class="section-note">${escapeHtml(subtitle)}</div>
+      <table>
+        <thead>
+          <tr>
+            <th>Payment Date</th>
+            <th>Customer</th>
+            <th>Type</th>
+            <th>Method</th>
+            <th>Reference</th>
+            <th>Gross Amount</th>
+            <th>Status</th>
+            <th>Applied To</th>
+            <th>Collection Receipt (CR)</th>
+            <th>Resolved Date</th>
+            <th>Notes</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${rows.map((row) => `
+            <tr>
+              <td>${escapeHtml(row.paymentDate || "-")}</td>
+              <td>${escapeHtml(row.customerName)}</td>
+              <td>${escapeHtml(row.paymentType)}</td>
+              <td>${escapeHtml(row.method)}</td>
+              <td>${escapeHtml(row.referenceDisplay)}</td>
+              <td>${formatPeso(row.amount)}</td>
+              <td>${escapeHtml(row.statusLabel)}</td>
+              <td>${escapeHtml(row.appliedTo)}</td>
+              <td>${escapeHtml(row.collectionReceipt)}</td>
+              <td>${escapeHtml(row.resolvedDateDisplay)}</td>
+              <td>${escapeHtml(row.notes)}</td>
+            </tr>
+          `).join("")}
+        </tbody>
+      </table>
+    `;
+  }
+
+  function printPaymentReceivedReport() {
+    const rows = getPaymentReceivedReportRows();
+    if (!rows.length) return alert("No payment rows to print.");
+
+    const grossTotal = rows.reduce((sum, row) => sum + row.amount, 0);
+    const clearedRows = rows.filter((row) => row.statusFilterValue === "COLLECTED");
+    const pendingRows = rows.filter((row) => row.statusFilterValue === "PENDING");
+    const bouncedRows = rows.filter((row) => row.statusFilterValue === "BOUNCED");
+    const clearedTotal = clearedRows.reduce((sum, row) => sum + row.amount, 0);
+    const pendingTotal = pendingRows.reduce((sum, row) => sum + row.amount, 0);
+    const bouncedTotal = bouncedRows.reduce((sum, row) => sum + row.amount, 0);
+    const selectedCustomer = state.customers.find((customer) => customer.id === (el.paymentReportCustomerFilter?.value || ""));
+    const customerLabel = selectedCustomer?.name || "All Customers";
+    const paymentDateFrom = el.paymentReportDateFrom?.value || "-";
+    const paymentDateTo = el.paymentReportDateTo?.value || "-";
+    const methodLabel = el.paymentReportMethodFilter?.value || "All Methods";
+    const statusLabel = el.paymentReportStatusFilter?.selectedOptions?.[0]?.textContent || "All Statuses";
+
+    const html = `
+      <html><head><title>AKY Payment Received Report</title><style>
+      body { font-family: Arial, sans-serif; padding: 24px; color: #111; }
+      h1 { margin: 0 0 8px; }
+      h2 { margin: 24px 0 8px; }
+      .meta { margin-bottom: 16px; color: #555; line-height: 1.6; }
+      .summary { margin-bottom: 18px; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+      .summary-card { border: 1px solid #ccc; padding: 10px 12px; border-radius: 8px; }
+      .summary-card strong { display: block; margin-top: 4px; font-size: 16px; }
+      .section-note { margin-bottom: 10px; color: #555; }
+      .empty-row { padding: 12px; border: 1px solid #ccc; }
+      table { width: 100%; border-collapse: collapse; font-size: 11px; margin-bottom: 18px; }
+      th, td { border: 1px solid #ccc; padding: 7px; text-align: left; vertical-align: top; }
+      th { background: #f3f3f3; }
+      </style></head><body>
+      <h1>AKY Payment Received Report</h1>
+      <div class="meta">
+        Generated on ${new Date().toLocaleString()}<br>
+        Customer: ${escapeHtml(customerLabel)}<br>
+        Payment Date From: ${escapeHtml(paymentDateFrom)}<br>
+        Payment Date To: ${escapeHtml(paymentDateTo)}<br>
+        Method Filter: ${escapeHtml(methodLabel)}<br>
+        Status Filter: ${escapeHtml(statusLabel)}<br>
+        Note: Pending and bounced cheques are shown for traceability only and are excluded from the cleared / collected total.
+      </div>
+      <div class="summary">
+        <div class="summary-card">Payments in Result<strong>${escapeHtml(String(rows.length))}</strong></div>
+        <div class="summary-card">Gross Entered<strong>${formatPeso(grossTotal)}</strong></div>
+        <div class="summary-card">Cleared / Collected<strong>${formatPeso(clearedTotal)}</strong></div>
+        <div class="summary-card">Pending Cheques<strong>${formatPeso(pendingTotal)}</strong></div>
+        <div class="summary-card">Bounced Cheques<strong>${formatPeso(bouncedTotal)}</strong></div>
+      </div>
+      ${buildPaymentReportSectionHtml("Cleared / Collected Payments", "These amounts are safe to treat as collected based on the current code.", clearedRows)}
+      ${buildPaymentReportSectionHtml("Pending Payments / Cheques", "These rows are visible for follow-up but excluded from cleared totals.", pendingRows)}
+      ${buildPaymentReportSectionHtml("Bounced Cheques", "These rows remain historical records and are excluded from cleared totals.", bouncedRows)}
+      <script>window.onload = () => window.print();<\/script></body></html>`;
+
+    openPrintWindow(html);
   }
 
     function downloadTbvReportCsv() {
