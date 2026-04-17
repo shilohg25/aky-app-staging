@@ -1,6 +1,6 @@
 (function () {
   "use strict";
-const { supabaseClient, ACCOUNT_ADMIN_FUNCTION_URL, ROLE_PERMISSIONS, state } = window;
+const { supabaseClient, ACCOUNT_ADMIN_FUNCTION_URL, ROLE_PERMISSIONS, state, AKY_DOCUMENT_UTILS } = window;
   
   const el = mapElements();
 
@@ -1752,44 +1752,26 @@ function initInvoiceDocumentFlow() {
   });
 
   setInvoiceDocumentStatus(
-  "Optional. Upload an image. It will be saved to Document Vault using the invoice number after the invoice is saved.",
-  false
-);
-
-applyInvoiceDocumentLayout();
+    "Optional. Upload an image. It will be saved to Document Vault using the invoice number after the invoice is saved.",
+    false
+  );
 }
 
 function applyInvoiceDocumentFile(file) {
-  if (!file.type || !file.type.startsWith("image/")) {
-    throw new Error("Please upload an image file only.");
-  }
-
-  if (file.size > 6 * 1024 * 1024) {
-    throw new Error("Please keep the image under 6MB.");
-  }
-
-  if (invoiceDocumentState.previewUrl) {
-    URL.revokeObjectURL(invoiceDocumentState.previewUrl);
-  }
-
-  invoiceDocumentState.file = file;
-  invoiceDocumentState.source = "upload";
-  invoiceDocumentState.previewUrl = URL.createObjectURL(file);
-
   const previewWrap = document.getElementById("invoiceDocumentPreviewWrap");
   const previewImg = document.getElementById("invoiceDocumentPreviewImg");
 
-  if (previewWrap && previewImg) {
-    previewImg.src = invoiceDocumentState.previewUrl;
-    previewWrap.classList.remove("hidden");
-  }
+  AKY_DOCUMENT_UTILS.applyPreviewFile(invoiceDocumentState, {
+    file,
+    previewWrap,
+    previewImg,
+    source: "upload"
+  });
 
   setInvoiceDocumentStatus(
-  "Image ready. When you click Save Invoice, this image will also be saved into Document Vault.",
-  false
-);
-
-applyInvoiceDocumentLayout();
+    "Image ready. When you click Save Invoice, this image will also be saved into Document Vault.",
+    false
+  );
 }
 
 function clearInvoiceDocumentDraft(resetStatus = false) {
@@ -1798,45 +1780,31 @@ function clearInvoiceDocumentDraft(resetStatus = false) {
   const previewWrap = document.getElementById("invoiceDocumentPreviewWrap");
   const previewImg = document.getElementById("invoiceDocumentPreviewImg");
 
-  if (invoiceDocumentState.previewUrl) {
-    URL.revokeObjectURL(invoiceDocumentState.previewUrl);
-  }
-
-  invoiceDocumentState.file = null;
-  invoiceDocumentState.previewUrl = "";
-  invoiceDocumentState.source = "upload";
-
-  if (fileInput) fileInput.value = "";
-  if (notesInput) notesInput.value = "";
-  if (previewImg) previewImg.src = "";
-  if (previewWrap) previewWrap.classList.add("hidden");
+  AKY_DOCUMENT_UTILS.resetPreviewState(invoiceDocumentState, {
+    fileInput,
+    previewWrap,
+    previewImg,
+    source: "upload",
+    onReset: () => {
+      if (notesInput) notesInput.value = "";
+    }
+  });
 
   if (resetStatus) {
-  setInvoiceDocumentStatus(
-    "Optional. Upload an image. It will be saved to Document Vault using the invoice number after the invoice is saved.",
-    false
-  );
-}
-
-applyInvoiceDocumentLayout();
+    setInvoiceDocumentStatus(
+      "Optional. Upload an image. It will be saved to Document Vault using the invoice number after the invoice is saved.",
+      false
+    );
+  }
 }
 
 function setInvoiceDocumentStatus(message, isError) {
   const statusBox = document.getElementById("invoiceDocumentStatus");
-  if (!statusBox) return;
-
-  statusBox.textContent = message;
-  statusBox.classList.toggle("doc-status-error", !!isError);
-  statusBox.classList.toggle("doc-status-success", !isError);
+  AKY_DOCUMENT_UTILS.setStatusMessage(statusBox, message, isError);
 }
 
 function invoiceDocumentSafeFileName(fileName) {
-  const cleaned = String(fileName || "invoice-document.png")
-    .trim()
-    .replace(/\s+/g, "-")
-    .replace(/[^a-zA-Z0-9._-]/g, "");
-
-  return cleaned || `invoice-document-${Date.now()}.png`;
+  return AKY_DOCUMENT_UTILS.safeStorageFileName(fileName, "invoice-document.png");
 }
 
 async function saveInvoiceDocumentToVault({ customerId, invoiceId, invoiceNumber, notes }) {
@@ -2560,7 +2528,7 @@ async function saveInvoice() {
     `;
   }
 
-  const paymentDocumentState = {
+    const paymentDocumentState = {
     file: null,
     previewUrl: "",
     source: "upload"
@@ -2595,29 +2563,15 @@ async function saveInvoice() {
   }
 
   function applyPaymentDocumentFile(file) {
-    if (!file.type || !file.type.startsWith("image/")) {
-      throw new Error("Please upload an image file only.");
-    }
-
-    if (file.size > 6 * 1024 * 1024) {
-      throw new Error("Please keep the image under 6MB.");
-    }
-
-    if (paymentDocumentState.previewUrl) {
-      URL.revokeObjectURL(paymentDocumentState.previewUrl);
-    }
-
-    paymentDocumentState.file = file;
-    paymentDocumentState.source = "upload";
-    paymentDocumentState.previewUrl = URL.createObjectURL(file);
-
     const previewWrap = document.getElementById("paymentDocumentPreviewWrap");
     const previewImg = document.getElementById("paymentDocumentPreviewImg");
 
-    if (previewWrap && previewImg) {
-      previewImg.src = paymentDocumentState.previewUrl;
-      previewWrap.classList.remove("hidden");
-    }
+    AKY_DOCUMENT_UTILS.applyPreviewFile(paymentDocumentState, {
+      file,
+      previewWrap,
+      previewImg,
+      source: "upload"
+    });
 
     setPaymentDocumentStatus(
       "Image ready. When you click Finish Payment, this image will also be saved to Document Vault.",
@@ -2630,17 +2584,12 @@ async function saveInvoice() {
     const previewWrap = document.getElementById("paymentDocumentPreviewWrap");
     const previewImg = document.getElementById("paymentDocumentPreviewImg");
 
-    if (paymentDocumentState.previewUrl) {
-      URL.revokeObjectURL(paymentDocumentState.previewUrl);
-    }
-
-    paymentDocumentState.file = null;
-    paymentDocumentState.previewUrl = "";
-    paymentDocumentState.source = "upload";
-
-    if (fileInput) fileInput.value = "";
-    if (previewImg) previewImg.src = "";
-    if (previewWrap) previewWrap.classList.add("hidden");
+    AKY_DOCUMENT_UTILS.resetPreviewState(paymentDocumentState, {
+      fileInput,
+      previewWrap,
+      previewImg,
+      source: "upload"
+    });
 
     if (resetStatus) {
       setPaymentDocumentStatus(
@@ -2652,20 +2601,11 @@ async function saveInvoice() {
 
   function setPaymentDocumentStatus(message, isError) {
     const statusBox = document.getElementById("paymentDocumentStatus");
-    if (!statusBox) return;
-
-    statusBox.textContent = message;
-    statusBox.classList.toggle("doc-status-error", !!isError);
-    statusBox.classList.toggle("doc-status-success", !isError);
+    AKY_DOCUMENT_UTILS.setStatusMessage(statusBox, message, isError);
   }
 
   function paymentDocumentSafeFileName(fileName) {
-    const cleaned = String(fileName || "payment-proof.png")
-      .trim()
-      .replace(/\s+/g, "-")
-      .replace(/[^a-zA-Z0-9._-]/g, "");
-
-    return cleaned || `payment-proof-${Date.now()}.png`;
+    return AKY_DOCUMENT_UTILS.safeStorageFileName(fileName, "payment-proof.png");
   }
 
   function buildPaymentDocumentMeta(payment, details, method) {
@@ -5870,31 +5810,17 @@ function closeDocVaultPopup() {
   }
 }
 
-  function applyDocumentVaultFile(file, source) {
-    if (!file.type.startsWith("image/")) {
-      throw new Error("Please use an image file only.");
-    }
-
-    if (file.size > 6 * 1024 * 1024) {
-      throw new Error("Please keep the image under 6MB.");
-    }
-
-    if (documentVaultState.previewUrl) {
-      URL.revokeObjectURL(documentVaultState.previewUrl);
-    }
-
-    documentVaultState.file = file;
-    documentVaultState.source = source || "upload";
-    documentVaultState.previewUrl = URL.createObjectURL(file);
-
+    function applyDocumentVaultFile(file, source) {
     const previewWrap = document.getElementById("customerDocumentPreviewWrap");
     const previewImg = document.getElementById("customerDocumentPreviewImg");
     const titleInput = document.getElementById("customerDocumentTitle");
 
-    if (previewWrap && previewImg) {
-      previewImg.src = documentVaultState.previewUrl;
-      previewWrap.classList.remove("hidden");
-    }
+    AKY_DOCUMENT_UTILS.applyPreviewFile(documentVaultState, {
+      file,
+      previewWrap,
+      previewImg,
+      source: source || "upload"
+    });
 
     if (titleInput && !titleInput.value.trim()) {
       titleInput.value = docVaultTitleFromFile(file.name);
@@ -5912,21 +5838,18 @@ function closeDocVaultPopup() {
     const notesInput = document.getElementById("customerDocumentNotes");
     const categoryInput = document.getElementById("customerDocumentCategory");
 
-    if (documentVaultState.previewUrl) {
-      URL.revokeObjectURL(documentVaultState.previewUrl);
-    }
-
-    documentVaultState.file = null;
-    documentVaultState.source = "upload";
-    documentVaultState.previewUrl = "";
-
-    if (fileInput) fileInput.value = "";
-    if (previewImg) previewImg.src = "";
-    if (previewWrap) previewWrap.classList.add("hidden");
-    if (titleInput) titleInput.value = "";
-    if (referenceInput) referenceInput.value = "";
-    if (notesInput) notesInput.value = "";
-    if (categoryInput) categoryInput.value = "invoice";
+    AKY_DOCUMENT_UTILS.resetPreviewState(documentVaultState, {
+      fileInput,
+      previewWrap,
+      previewImg,
+      source: "upload",
+      onReset: () => {
+        if (titleInput) titleInput.value = "";
+        if (referenceInput) referenceInput.value = "";
+        if (notesInput) notesInput.value = "";
+        if (categoryInput) categoryInput.value = "invoice";
+      }
+    });
 
     if (resetStatus) {
       setDocumentVaultStatus("Choose an image. Max 6MB.", false);
@@ -5935,11 +5858,7 @@ function closeDocVaultPopup() {
 
   function setDocumentVaultStatus(message, isError) {
     const statusBox = document.getElementById("customerDocumentStatus");
-    if (!statusBox) return;
-
-    statusBox.innerHTML = message;
-    statusBox.classList.toggle("doc-status-error", !!isError);
-    statusBox.classList.toggle("doc-status-success", !isError);
+    AKY_DOCUMENT_UTILS.setStatusMessage(statusBox, message, isError);
   }
 
   async function saveCustomerDocument() {
@@ -6024,7 +5943,7 @@ await loadCustomerDocuments();
 setDocumentVaultStatus("Document saved successfully.", false);
 closeDocVaultPopup();
     } catch (error) {
-            setDocumentVaultStatus(escapeHtml(error.message || "Could not save document."), true);
+                  setDocumentVaultStatus(error.message || "Could not save document.", true);
     } finally {
       if (saveBtn) {
         saveBtn.disabled = false;
@@ -6034,7 +5953,7 @@ closeDocVaultPopup();
     }
   }
 
-  async function loadCustomerDocuments() {
+    async function loadCustomerDocuments() {
   const customer = typeof getSelectedCustomer === "function" ? getSelectedCustomer() : null;
   const tableBody = document.getElementById("customerDocumentsTableBody");
   if (!tableBody) return;
@@ -6046,6 +5965,7 @@ closeDocVaultPopup();
 
   tableBody.innerHTML = `<tr><td colspan="7" class="muted">Loading documents...</td></tr>`;
 
+  try {
     const { data, error } = await supabaseClient
       .from("customer_documents")
       .select("*")
@@ -6058,7 +5978,11 @@ closeDocVaultPopup();
     }
 
     documentVaultState.documents = Array.isArray(data) ? data : [];
-renderCustomerDocumentsTable();
+    renderCustomerDocumentsTable();
+  } catch (error) {
+    console.error(error);
+    tableBody.innerHTML = `<tr><td colspan="7" class="muted">Could not load documents.</td></tr>`;
+  }
 }
 
 window.AKY_loadCustomerDocuments = loadCustomerDocuments;
@@ -6157,7 +6081,7 @@ window.AKY_loadCustomerDocuments = loadCustomerDocuments;
 
       setDocumentVaultStatus("Document deleted successfully.", false);
     } catch (error) {
-            setDocumentVaultStatus(escapeHtml(error.message || "Could not delete document."), true);
+                  setDocumentVaultStatus(error.message || "Could not delete document.", true);
     }
   }
 
@@ -6175,19 +6099,11 @@ window.AKY_loadCustomerDocuments = loadCustomerDocuments;
       .trim() || "Document";
   }
 
-  function docVaultSafeFileName(fileName) {
-    const cleaned = String(fileName || "document.png")
-      .trim()
-      .replace(/\s+/g, "-")
-      .replace(/[^a-zA-Z0-9._-]/g, "");
-
-    return cleaned || `document-${Date.now()}.png`;
+    function docVaultSafeFileName(fileName) {
+    return AKY_DOCUMENT_UTILS.safeStorageFileName(fileName, "document.png");
   }
   function docVaultFormatBytes(bytes) {
-    const value = Number(bytes || 0);
-    if (value < 1024) return `${value} B`;
-    if (value < 1024 * 1024) return `${(value / 1024).toFixed(1)} KB`;
-    return `${(value / (1024 * 1024)).toFixed(2)} MB`;
+    return AKY_DOCUMENT_UTILS.formatBytes(bytes);
   }
 
   function docVaultFormatDateTime(value) {
