@@ -63,7 +63,8 @@ Use this checklist after every change.
 \- \[ ] Saving a payment still works
 
 \- \[ ] Payment view modal still opens
-
+\- \[ ] Admin can open the Cheque Register but cannot clear or bounce cheques
+\- \[ ] Owner can still clear, bounce, and replace bounced cheques
 
 
 \## Document checks
