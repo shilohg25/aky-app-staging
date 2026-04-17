@@ -15,6 +15,10 @@ window.ROLE_PERMISSIONS = {
     downloadReports: true,
     generateSoa: true,
     manageAccounts: true,
+    viewChequeRegister: true,
+    clearCheque: true,
+    bounceCheque: true,
+    replaceBouncedCheque: true,
     noteRequiredOnEdit: false
   },
   "co-owner": {
@@ -33,6 +37,10 @@ window.ROLE_PERMISSIONS = {
     downloadReports: true,
     generateSoa: true,
     manageAccounts: false,
+    viewChequeRegister: true,
+    clearCheque: false,
+    bounceCheque: false,
+    replaceBouncedCheque: false,
     noteRequiredOnEdit: false
   },
   admin: {
@@ -51,6 +59,10 @@ window.ROLE_PERMISSIONS = {
     downloadReports: true,
     generateSoa: true,
     manageAccounts: false,
+    viewChequeRegister: true,
+    clearCheque: false,
+    bounceCheque: false,
+    replaceBouncedCheque: false,
     noteRequiredOnEdit: true
   },
   user: {
@@ -69,6 +81,10 @@ window.ROLE_PERMISSIONS = {
     downloadReports: true,
     generateSoa: true,
     manageAccounts: false,
+    viewChequeRegister: true,
+    clearCheque: false,
+    bounceCheque: false,
+    replaceBouncedCheque: false,
     noteRequiredOnEdit: false
   }
 };
