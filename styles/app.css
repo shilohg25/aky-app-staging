@@ -228,6 +228,33 @@ body {
   gap: 8px;
 }
 
+.document-upload-layout {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 18px;
+  align-items: flex-start;
+}
+
+.document-upload-main {
+  flex: 1 1 340px;
+  min-width: 280px;
+}
+
+.document-upload-preview {
+  flex: 0 0 360px;
+  width: 100%;
+  max-width: 360px;
+  margin-top: 0;
+}
+
+.document-upload-preview .doc-preview-img {
+  width: 100%;
+  max-width: 360px;
+  max-height: 520px;
+  object-fit: contain;
+  border-radius: 12px;
+}
+
 .view-section {
   display: grid;
   gap: 16px;
