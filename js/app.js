@@ -40,6 +40,32 @@ const { supabaseClient, ACCOUNT_ADMIN_FUNCTION_URL, ROLE_PERMISSIONS, state, AKY
     getFilteredTbvRows,
     escapeHtml
   });
+    const {
+    refreshAccounts,
+    loadAccounts,
+    getFilteredAccounts,
+    renderAccountsView,
+    openCreateAccountModal,
+    openEditAccountModal,
+    saveAccount,
+    openResetPasswordModal,
+    saveResetPassword,
+    deleteAccount,
+    callAccountAdmin
+  } = window.AKY_APP_ACCOUNTS.initAppAccounts({
+    supabaseClient,
+    ACCOUNT_ADMIN_FUNCTION_URL,
+    state,
+    el,
+    canManageAccounts,
+    validatePassword,
+    addLog,
+    closeModal,
+    openModal,
+    escapeHtml,
+    capitalizeRole,
+    formatDateTime
+  });
   const { bindEvents } = window.AKY_APP_EVENTS.initAppEvents({
     el,
     login,
@@ -3763,206 +3789,7 @@ function renderLogSortIndicators() {
     el.logTableBody.appendChild(row);
   });
 }
-  async function refreshAccounts() {
-    await loadAccounts();
-    renderAccountsView();
-  }
-
-  async function loadAccounts() {
-    if (!canManageAccounts()) return;
-    try {
-      const result = await callAccountAdmin("list_users", {});
-      state.accounts = Array.isArray(result?.accounts) ? result.accounts : [];
-    } catch (error) {
-      console.error("account-admin function is missing or not deployed:", error);
-      state.accounts = [];
-    }
-  }
-
-  function getFilteredAccounts() {
-    const term = (el.accountSearch.value || "").trim().toLowerCase();
-    const role = el.accountRoleFilter.value || "";
-    return state.accounts.filter((account) => {
-      const haystack = `${account.username || ""} ${account.email || ""} ${account.role || ""}`.toLowerCase();
-      if (term && !haystack.includes(term)) return false;
-      if (role && account.role !== role) return false;
-      return true;
-    }).sort((a, b) => String(a.email || "").localeCompare(String(b.email || "")));
-  }
-
-  function renderAccountsView() {
-    if (!canManageAccounts()) return;
-    const accounts = getFilteredAccounts();
-    el.accountsTableBody.innerHTML = "";
-    if (!accounts.length) {
-      el.accountsTableBody.innerHTML = `<tr><td colspan="7" class="muted">No accounts found. If this is the first time opening this page, click Refresh.</td></tr>`;
-      return;
-    }
-
-    accounts.forEach((account) => {
-      const tr = document.createElement("tr");
-      const isSelf = account.id === state.currentProfile?.id;
-      tr.innerHTML = `
-        <td>${escapeHtml(account.username || "-")}</td>
-        <td>${escapeHtml(account.email || "-")}</td>
-        <td>${escapeHtml(capitalizeRole(account.role || "-"))}</td>
-        <td>${account.must_change_password ? "Yes" : "No"}</td>
-        <td>${account.is_active === false ? "Inactive" : "Active"}</td>
-        <td>${escapeHtml(formatDateTime(account.created_at || new Date().toISOString()))}</td>
-        <td>
-          <div class="row-actions">
-            <button class="btn btn-light action-edit-account">Edit</button>
-            <button class="btn btn-secondary action-reset-account">Reset Password</button>
-            <button class="btn btn-danger action-delete-account" ${isSelf ? "disabled" : ""}>Delete</button>
-          </div>
-        </td>
-      `;
-      tr.querySelector(".action-edit-account").addEventListener("click", () => openEditAccountModal(account.id));
-      tr.querySelector(".action-reset-account").addEventListener("click", () => openResetPasswordModal(account.id));
-      tr.querySelector(".action-delete-account").addEventListener("click", () => deleteAccount(account.id));
-      el.accountsTableBody.appendChild(tr);
-    });
-  }
-
-  function openCreateAccountModal() {
-    if (!canManageAccounts()) return;
-    state.editingAccountId = null;
-    el.accountModalTitle.textContent = "Create Account";
-    el.accountNameInput.value = "";
-    el.accountEmailInput.value = "";
-    el.accountRoleInput.value = "user";
-    el.accountPasswordInput.value = "";
-    el.accountMustChangePasswordInput.checked = true;
-    el.accountPasswordWrap.classList.remove("hidden");
-    el.accountModalHelpBox.textContent = "Owner creates the account and assigns the temporary password. The user changes it after first login.";
-    openModal(el.accountModal);
-  }
-
-  function openEditAccountModal(accountId) {
-    if (!canManageAccounts()) return;
-    const account = state.accounts.find((x) => x.id === accountId);
-    if (!account) return;
-    state.editingAccountId = accountId;
-    el.accountModalTitle.textContent = "Edit Account";
-    el.accountNameInput.value = account.username || "";
-    el.accountEmailInput.value = account.email || "";
-    el.accountRoleInput.value = account.role || "user";
-    el.accountPasswordInput.value = "";
-    el.accountMustChangePasswordInput.checked = !!account.must_change_password;
-    el.accountPasswordWrap.classList.add("hidden");
-    el.accountModalHelpBox.textContent = "Use Edit to update the name, email, role, and force-password-change setting. Use Reset Password for forgotten passwords.";
-    openModal(el.accountModal);
-  }
-
-  async function saveAccount() {
-    if (!canManageAccounts()) return;
-    const username = el.accountNameInput.value.trim();
-    const email = el.accountEmailInput.value.trim().toLowerCase();
-    const role = el.accountRoleInput.value;
-    const password = el.accountPasswordInput.value;
-    const mustChangePassword = el.accountMustChangePasswordInput.checked;
-
-    if (!username) return alert("Full name / username is required.");
-    if (!email) return alert("Email is required.");
-    if (!["owner", "co-owner", "admin", "user"].includes(role)) return alert("Invalid role.");
-
-    if (!state.editingAccountId) {
-      const validationError = validatePassword(password);
-      if (validationError) return alert(validationError);
-      try {
-        const result = await callAccountAdmin("create_user", { username, email, role, password, must_change_password: mustChangePassword });
-        await addLog("Create", "Account", email, `Created account with role ${role}`, null, result?.account || { email, role, username });
-        closeModal(el.accountModal);
-        await refreshAccounts();
-        alert("Account created successfully.");
-      } catch (error) {
-        console.error(error);
-        alert(error.message || "Failed to create account.");
-      }
-      return;
-    }
-
-    try {
-      const result = await callAccountAdmin("update_user", { user_id: state.editingAccountId, username, email, role, must_change_password: mustChangePassword });
-      await addLog("Edit", "Account", email, `Updated account role to ${role}`, state.accounts.find((x) => x.id === state.editingAccountId) || null, result?.account || { email, role, username });
-      closeModal(el.accountModal);
-      state.editingAccountId = null;
-      await refreshAccounts();
-      alert("Account updated successfully.");
-    } catch (error) {
-      console.error(error);
-      alert(error.message || "Failed to update account.");
-    }
-  }
-
-  function openResetPasswordModal(accountId) {
-    if (!canManageAccounts()) return;
-    const account = state.accounts.find((x) => x.id === accountId);
-    if (!account) return;
-    state.selectedAccountForReset = accountId;
-    el.resetPasswordInfo.innerHTML = `Reset password for <strong>${escapeHtml(account.username || account.email || "User")}</strong><br>Email: ${escapeHtml(account.email || "-")}`;
-    el.resetPasswordInput.value = "";
-    el.resetMustChangePasswordInput.checked = true;
-    openModal(el.resetPasswordModal);
-  }
-
-  async function saveResetPassword() {
-    if (!canManageAccounts()) return;
-    const accountId = state.selectedAccountForReset;
-    const newPassword = el.resetPasswordInput.value;
-    const mustChangePassword = el.resetMustChangePasswordInput.checked;
-    if (!accountId) return;
-    const validationError = validatePassword(newPassword);
-    if (validationError) return alert(validationError);
-    const account = state.accounts.find((x) => x.id === accountId);
-    try {
-      await callAccountAdmin("reset_password", { user_id: accountId, password: newPassword, must_change_password: mustChangePassword });
-      await addLog("Reset Password", "Account", account?.email || accountId, "Owner reset user password", account || null, { must_change_password: mustChangePassword });
-      closeModal(el.resetPasswordModal);
-      state.selectedAccountForReset = null;
-      await refreshAccounts();
-      alert("Password reset successfully.");
-    } catch (error) {
-      console.error(error);
-      alert(error.message || "Failed to reset password.");
-    }
-  }
-
-  async function deleteAccount(accountId) {
-    if (!canManageAccounts()) return;
-    if (accountId === state.currentProfile?.id) return alert("You cannot delete your own owner account while logged in.");
-    const account = state.accounts.find((x) => x.id === accountId);
-    if (!account) return;
-    const confirmed = window.confirm(`Delete account ${account.email}? This action cannot be undone.`);
-    if (!confirmed) return;
-    try {
-      await callAccountAdmin("delete_user", { user_id: accountId });
-      await addLog("Delete", "Account", account.email || accountId, "Owner deleted account", account, null);
-      await refreshAccounts();
-      alert("Account deleted successfully.");
-    } catch (error) {
-      console.error(error);
-      alert(error.message || "Failed to delete account.");
-    }
-  }
-
-  async function callAccountAdmin(action, payload) {
-    const { data: sessionData } = await supabaseClient.auth.getSession();
-    const accessToken = sessionData.session?.access_token;
-    if (!accessToken) throw new Error("Your session expired. Please log in again.");
-    const response = await fetch(`${ACCOUNT_ADMIN_FUNCTION_URL}?action=${encodeURIComponent(action)}`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${accessToken}`
-      },
-      body: JSON.stringify(payload || {})
-    });
-    const result = await response.json().catch(() => ({}));
-    if (!response.ok) throw new Error(result?.error || result?.message || `Account admin request failed: ${response.status}`);
-    return result;
-  }
-
+  
   async function addLog(action, entity, details, explanation, oldData, newData) {
     await supabaseClient.from("activity_logs").insert([{
       user_id: state.currentProfile?.id || null,
