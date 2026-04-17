@@ -788,33 +788,37 @@
     Nothing uploaded yet.
   </div>
 </div>
-      <div class="panel soft-panel">
+            <div class="panel soft-panel">
   <div class="panel-row">
     <h4 class="panel-title small-title">Invoice Document</h4>
   </div>
 
-  <div class="form-grid one-col mt-12">
-    <div class="field">
-      <label for="invoiceDocumentFileInput">Upload Invoice Image</label>
-      <input id="invoiceDocumentFileInput" type="file" accept="image/*" />
+  <div class="document-upload-layout mt-12">
+    <div class="document-upload-main">
+      <div class="form-grid one-col">
+        <div class="field">
+          <label for="invoiceDocumentFileInput">Upload Invoice Image</label>
+          <input id="invoiceDocumentFileInput" type="file" accept="image/*" />
+        </div>
+
+        <div class="field">
+          <label for="invoiceDocumentNotes">Notes</label>
+          <textarea id="invoiceDocumentNotes" rows="2" placeholder="Optional short note"></textarea>
+        </div>
+      </div>
+
+      <div class="btn-row mt-12">
+        <button id="clearInvoiceDocumentBtn" class="btn btn-light" type="button">Remove Document</button>
+      </div>
+
+      <div id="invoiceDocumentStatus" class="info-box mt-12">
+        Optional. Upload an image. It will be saved to Document Vault using the invoice number after the invoice is saved.
+      </div>
     </div>
 
-    <div class="field">
-      <label for="invoiceDocumentNotes">Notes</label>
-      <textarea id="invoiceDocumentNotes" rows="2" placeholder="Optional short note"></textarea>
+    <div id="invoiceDocumentPreviewWrap" class="doc-preview-wrap document-upload-preview hidden">
+      <img id="invoiceDocumentPreviewImg" class="doc-preview-img" alt="Invoice document preview" />
     </div>
-  </div>
-
-  <div id="invoiceDocumentPreviewWrap" class="doc-preview-wrap hidden">
-    <img id="invoiceDocumentPreviewImg" class="doc-preview-img" alt="Invoice document preview" />
-  </div>
-
-  <div class="btn-row mt-12">
-    <button id="clearInvoiceDocumentBtn" class="btn btn-light" type="button">Remove Document</button>
-  </div>
-
-  <div id="invoiceDocumentStatus" class="info-box mt-12">
-    Optional. Upload an image. It will be saved to Document Vault using the invoice number after the invoice is saved.
   </div>
 </div>
 <div id="invoiceDiscountWrap" class="panel soft-panel hidden">
@@ -980,28 +984,32 @@
         <input id="collectionReceiptInput" type="text" />
       </div>
 
-      <div class="panel soft-panel">
+            <div class="panel soft-panel">
         <div class="panel-row">
           <h4 class="panel-title small-title">Payment Proof</h4>
         </div>
 
-        <div class="form-grid one-col mt-12">
-          <div class="field">
-            <label for="paymentDocumentFileInput">Upload Payment Proof Image</label>
-            <input id="paymentDocumentFileInput" type="file" accept="image/*" />
+        <div class="document-upload-layout mt-12">
+          <div class="document-upload-main">
+            <div class="form-grid one-col">
+              <div class="field">
+                <label for="paymentDocumentFileInput">Upload Payment Proof Image</label>
+                <input id="paymentDocumentFileInput" type="file" accept="image/*" />
+              </div>
+            </div>
+
+            <div class="btn-row mt-12">
+              <button id="clearPaymentDocumentBtn" class="btn btn-light" type="button">Remove Document</button>
+            </div>
+
+            <div id="paymentDocumentStatus" class="info-box mt-12">
+              Optional. Upload one payment proof image. It will be saved to Document Vault after the payment is saved.
+            </div>
           </div>
-        </div>
 
-        <div id="paymentDocumentPreviewWrap" class="doc-preview-wrap hidden">
-          <img id="paymentDocumentPreviewImg" class="doc-preview-img" alt="Payment proof preview" />
-        </div>
-
-        <div class="btn-row mt-12">
-          <button id="clearPaymentDocumentBtn" class="btn btn-light" type="button">Remove Document</button>
-        </div>
-
-        <div id="paymentDocumentStatus" class="info-box mt-12">
-          Optional. Upload one payment proof image. It will be saved to Document Vault after the payment is saved.
+          <div id="paymentDocumentPreviewWrap" class="doc-preview-wrap document-upload-preview hidden">
+            <img id="paymentDocumentPreviewImg" class="doc-preview-img" alt="Payment proof preview" />
+          </div>
         </div>
       </div>
 
@@ -1235,10 +1243,11 @@
     </div>
   </div>
 
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-<script src="js/config.js"></script>
-<script src="js/permissions.js"></script>
-<script src="js/state.js"></script>
-<script src="js/app.js"></script>
+<script defer src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script defer src="js/config.js"></script>
+<script defer src="js/permissions.js"></script>
+<script defer src="js/state.js"></script>
+<script defer src="js/document-utils.js"></script>
+<script defer src="js/app.js"></script>
 </body>
 </html>
