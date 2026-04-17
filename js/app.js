@@ -3,138 +3,66 @@
 const { supabaseClient, ACCOUNT_ADMIN_FUNCTION_URL, ROLE_PERMISSIONS, state, AKY_DOCUMENT_UTILS, AKY_DOM_ELEMENTS, AKY_AI_DOCUMENT_ASSIST, AKY_CUSTOMER_DOCUMENT_VAULT } = window;
   
   const el = AKY_DOM_ELEMENTS.mapElements();
-
+  const { bindEvents } = window.AKY_APP_EVENTS.initAppEvents({
+    el,
+    login,
+    openChangePasswordModal,
+    runWithBusyState,
+    saveOwnPassword,
+    closeModal,
+    logout,
+    setView,
+    openAddCustomerModal,
+    renderCustomerList,
+    renderCustomerDiscountFields,
+    addContactRow,
+    saveCustomer,
+    openInvoiceModalForCreate,
+    renderInvoiceDiscountControls,
+    updateInvoiceTotal,
+    addLineItemRow,
+    saveInvoice,
+    openPaymentTypeModal,
+    openPayByInvoiceStep,
+    openPartialPaymentStep,
+    proceedSelectedInvoices,
+    renderPartialBalanceInfo,
+    proceedPartialPayment,
+    renderPaymentMethodFields,
+    renderPaymentReviewBox,
+    renderWithholdingTaxUi,
+    savePayment,
+    renderExecutiveView,
+    renderReportsView,
+    clearReportFilters,
+    downloadReportCsv,
+    printReport,
+    renderPaymentReceivedReportView,
+    clearPaymentReportFilters,
+    downloadPaymentReportCsv,
+    printPaymentReceivedReport,
+    renderTbvRequestsTable,
+    downloadTbvReportCsv,
+    printTbvReport,
+    saveTbvRequest,
+    decideTbv,
+    openSoaModal,
+    renderSoaPaymentRangeVisibility,
+    autofillSoaPaymentRange,
+    generateSoa,
+    openEditCustomerModal,
+    deleteSelectedCustomer,
+    renderAccountsView,
+    refreshAccounts,
+    openCreateAccountModal,
+    saveAccount,
+    saveResetPassword,
+    toggleLogSort
+  });
 window.addEventListener("load", () => {
   bindEvents();
   bootstrap();
 });
-
-    function bindEvents() {
-    el.loginBtn.addEventListener("click", login);
-    el.loginPassword.addEventListener("keydown", (e) => e.key === "Enter" && login());
-
-    el.openChangePasswordBtn.addEventListener("click", () => openChangePasswordModal(false));
-    el.saveOwnPasswordBtn.addEventListener("click", () => runWithBusyState(el.saveOwnPasswordBtn, "Saving...", saveOwnPassword));
-    el.closeChangePasswordModalBtn?.addEventListener("click", () => closeModal(el.changePasswordModal));
-    el.logoutBtn.addEventListener("click", logout);
-
-    el.navCustomers.addEventListener("click", () => setView("customers"));
-    el.navExecutive.addEventListener("click", () => setView("executive"));
-    el.navNotifications.addEventListener("click", () => setView("notifications"));
-    el.navChequeRegister.addEventListener("click", () => setView("cheque-register"));
-    el.navReports.addEventListener("click", () => setView("reports"));
-    el.navLogs.addEventListener("click", () => setView("logs"));
-    el.navAccounts.addEventListener("click", () => setView("accounts"));
-
-    el.openCustomerModalBtn.addEventListener("click", openAddCustomerModal);
-    el.customerSearch.addEventListener("input", renderCustomerList);
-    el.customerSearchBtn.addEventListener("click", renderCustomerList);
-    el.customerClearSearchBtn.addEventListener("click", () => {
-      el.customerSearch.value = "";
-      renderCustomerList();
-    });
-
-    el.closeCustomerModalBtn.addEventListener("click", () => closeModal(el.customerModal));
-    el.customerDiscountAuthorizedInput?.addEventListener("change", renderCustomerDiscountFields);
-    el.addContactBtn.addEventListener("click", () => addContactRow());
-    el.saveCustomerBtn.addEventListener("click", () => runWithBusyState(el.saveCustomerBtn, "Saving...", saveCustomer));
-
-    el.createInvoiceBtn.addEventListener("click", openInvoiceModalForCreate);
-    el.closeInvoiceModalBtn.addEventListener("click", () => closeModal(el.invoiceModal));
-    el.invoiceDiscountEnabled?.addEventListener("change", renderInvoiceDiscountControls);
-    el.invoiceDiscountMode?.addEventListener("change", renderInvoiceDiscountControls);
-    el.invoiceDiscountFixedAmount?.addEventListener("input", updateInvoiceTotal);
-    el.addLineBtn.addEventListener("click", () => addLineItemRow());
-    el.saveInvoiceBtn.addEventListener("click", () => runWithBusyState(el.saveInvoiceBtn, "Saving...", saveInvoice));
-
-    el.closeInvoiceViewModalBtn.addEventListener("click", () => closeModal(el.invoiceViewModal));
-    el.closePaymentViewModalBtn?.addEventListener("click", () => closeModal(el.paymentViewModal));
-    el.makePaymentBtn.addEventListener("click", openPaymentTypeModal);
-    el.closePaymentTypeModalBtn.addEventListener("click", () => closeModal(el.paymentTypeModal));
-    el.payByInvoiceBtn.addEventListener("click", openPayByInvoiceStep);
-    el.partialPaymentBtn.addEventListener("click", openPartialPaymentStep);
-
-    el.closeInvoiceSelectionModalBtn.addEventListener("click", () => closeModal(el.invoiceSelectionModal));
-    el.cancelInvoiceSelectionBtn.addEventListener("click", () => closeModal(el.invoiceSelectionModal));
-    el.proceedInvoiceSelectionBtn.addEventListener("click", proceedSelectedInvoices);
-
-    el.closePartialPaymentModalBtn.addEventListener("click", () => closeModal(el.partialPaymentModal));
-    el.partialAmountInput.addEventListener("input", renderPartialBalanceInfo);
-    el.proceedPartialPaymentBtn.addEventListener("click", proceedPartialPayment);
-
-        el.closePaymentMethodModalBtn.addEventListener("click", () => closeModal(el.paymentMethodModal));
-    el.paymentMethodSelect.addEventListener("change", () => {
-      renderPaymentMethodFields();
-      renderPaymentReviewBox();
-    });
-    el.collectionReceiptInput?.addEventListener("input", renderPaymentReviewBox);
-    el.withholdingTaxAppliedInput?.addEventListener("change", renderWithholdingTaxUi);
-    el.savePaymentBtn.addEventListener("click", () => runWithBusyState(el.savePaymentBtn, "Saving...", savePayment));
-
-    el.applyExecFilterBtn.addEventListener("click", renderExecutiveView);
-    el.clearExecFilterBtn.addEventListener("click", () => {
-      el.execDateFrom.value = "";
-      el.execDateTo.value = "";
-      renderExecutiveView();
-    });
-
-        el.applyReportFilterBtn.addEventListener("click", renderReportsView);
-    el.clearReportFilterBtn.addEventListener("click", clearReportFilters);
-    el.downloadReportBtn.addEventListener("click", downloadReportCsv);
-    el.printReportBtn.addEventListener("click", printReport);
-    el.applyPaymentReportFilterBtn?.addEventListener("click", renderPaymentReceivedReportView);
-    el.clearPaymentReportFilterBtn?.addEventListener("click", clearPaymentReportFilters);
-    el.downloadPaymentReportBtn?.addEventListener("click", downloadPaymentReportCsv);
-    el.printPaymentReportBtn?.addEventListener("click", printPaymentReceivedReport);
-
-    el.notificationTbvStatusFilter?.addEventListener("change", renderTbvRequestsTable);
-    el.notificationTbvInvoiceSearch?.addEventListener("input", renderTbvRequestsTable);
-    el.downloadTbvReportBtn?.addEventListener("click", downloadTbvReportCsv);
-    el.printTbvReportBtn?.addEventListener("click", printTbvReport);
-
-    el.closeTbvModalBtn.addEventListener("click", () => closeModal(el.tbvModal));
-    el.saveTbvBtn.addEventListener("click", saveTbvRequest);
-
-    el.closeTbvDecisionModalBtn.addEventListener("click", () => closeModal(el.tbvDecisionModal));
-    el.approveTbvBtn.addEventListener("click", () => decideTbv("APPROVED"));
-    el.denyTbvBtn.addEventListener("click", () => decideTbv("DENIED"));
-
-    el.createSOABtn.addEventListener("click", openSoaModal);
-    el.closeSoaModalBtn.addEventListener("click", () => closeModal(el.soaModal));
-    el.soaShowPayments.addEventListener("change", renderSoaPaymentRangeVisibility);
-    el.soaAsOfDate.addEventListener("change", autofillSoaPaymentRange);
-    el.generateSoaBtn.addEventListener("click", generateSoa);
-
-    el.editCustomerBtn.addEventListener("click", openEditCustomerModal);
-    el.deleteCustomerBtn.addEventListener("click", deleteSelectedCustomer);
-
-    el.applyAccountFilterBtn.addEventListener("click", renderAccountsView);
-    el.refreshAccountsBtn.addEventListener("click", refreshAccounts);
-    el.openAccountModalBtn.addEventListener("click", openCreateAccountModal);
-    el.closeAccountModalBtn.addEventListener("click", () => closeModal(el.accountModal));
-    el.saveAccountBtn.addEventListener("click", () => runWithBusyState(el.saveAccountBtn, "Saving...", saveAccount));
-    el.closeResetPasswordModalBtn.addEventListener("click", () => closeModal(el.resetPasswordModal));
-    el.saveResetPasswordBtn.addEventListener("click", () => runWithBusyState(el.saveResetPasswordBtn, "Saving...", saveResetPassword));
-
-    document.querySelectorAll("#logView .sortable-th").forEach((th) => {
-      th.addEventListener("click", () => toggleLogSort(th.dataset.sort));
-    });
-
-    document.querySelectorAll(".modal").forEach((modal) => {
-      modal.addEventListener("click", (e) => {
-        if (e.target === modal) closeModal(modal);
-      });
-    });
-
-    document.addEventListener("keydown", (e) => {
-      if (e.key === "Escape") {
-        document.querySelectorAll(".modal").forEach((modal) => closeModal(modal));
-      }
-    });
-
-    window.addEventListener("online", () => alert("Internet connection restored."));
-    window.addEventListener("offline", () => alert("You are offline. Already-loaded data can still be viewed, printed, and exported on this device."));
-  }
 
     async function bootstrap() {
     if (!ensureSupabaseClientReady()) return;
