@@ -1,6 +1,6 @@
 (function () {
   "use strict";
-const { supabaseClient, ACCOUNT_ADMIN_FUNCTION_URL, ROLE_PERMISSIONS, state, AKY_DOCUMENT_UTILS, AKY_DOM_ELEMENTS } = window;
+const { supabaseClient, ACCOUNT_ADMIN_FUNCTION_URL, ROLE_PERMISSIONS, state, AKY_DOCUMENT_UTILS, AKY_DOM_ELEMENTS, AKY_AI_DOCUMENT_ASSIST } = window;
   
   const el = AKY_DOM_ELEMENTS.mapElements();
 
