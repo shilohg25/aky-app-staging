@@ -507,8 +507,12 @@ generateSoaBtn: byId("generateSoaBtn"),
   function canViewLogs() { return getRoleConfig().viewLogs; }
   function canRequestTbv() { return getRoleConfig().requestTbv; }
   function canApproveTbv() { return getRoleConfig().approveTbv; }
-  function canGenerateSoa() { return getRoleConfig().generateSoa; }
+    function canGenerateSoa() { return getRoleConfig().generateSoa; }
   function canManageAccounts() { return getRoleConfig().manageAccounts; }
+  function canViewChequeRegister() { return getRoleConfig().viewChequeRegister !== false; }
+  function canClearCheque() { return !!getRoleConfig().clearCheque; }
+  function canBounceCheque() { return !!getRoleConfig().bounceCheque; }
+  function canReplaceBouncedCheque() { return !!getRoleConfig().replaceBouncedCheque; }
   function canAuthorizeCustomerDiscount() { return hasRole("owner"); }
   function canUseAiAssist() { return hasRole("owner"); }
   function canUploadCustomerDocuments() { return !hasRole("co-owner"); }
@@ -804,7 +808,8 @@ generateSoaBtn: byId("generateSoaBtn"),
     document.querySelectorAll(".payment-create-access").forEach((node) => node.classList.toggle("hidden", !canCreatePayment()));
     document.querySelectorAll(".owner-access").forEach((node) => node.classList.toggle("hidden", !canManageAccounts() && !canDeleteCustomer()));
 
-    el.navAccounts.classList.toggle("hidden", !canManageAccounts());
+        el.navAccounts.classList.toggle("hidden", !canManageAccounts());
+    el.navChequeRegister.classList.toggle("hidden", !canViewChequeRegister());
     el.openCustomerModalBtn.classList.toggle("hidden", !canCreateCustomer());
     el.createSOABtn.classList.toggle("hidden", !canGenerateSoa());
   }
@@ -852,7 +857,7 @@ generateSoaBtn: byId("generateSoaBtn"),
       return;
     }
 
-    if (view === "cheque-register") {
+        if (view === "cheque-register" && canViewChequeRegister()) {
       renderLazyView("cheque-register");
       el.chequeRegisterView.classList.remove("hidden");
       el.navChequeRegister.classList.add("active");
@@ -1077,9 +1082,14 @@ function renderCustomerContacts(customer) {
     return "Pending";
   }
 
-  function canManageChequeRegister() {
-    const role = state.currentProfile?.role || "";
-    return role === "owner" || role === "admin";
+    function canManageChequeRegister() {
+    return canClearCheque() || canBounceCheque() || canReplaceBouncedCheque();
+  }
+
+  function ensureChequeActionAllowed(canRun, deniedMessage) {
+    if (canRun()) return true;
+    alert(deniedMessage);
+    return false;
   }
 
   function getChequeRegisterEntries() {
@@ -3242,8 +3252,8 @@ el.execOutstanding.textContent = formatCompactPeso(
     body = panel.querySelector("#postDatedChequesBody");
     return body;
   }
-    async function markChequeCleared(paymentId) {
-    if (!canManageChequeRegister()) return;
+        async function markChequeCleared(paymentId) {
+    if (!ensureChequeActionAllowed(canClearCheque, "You do not have permission to clear cheques.")) return;
 
     const payment = state.payments.find((p) => p.id === paymentId);
     if (!payment) return alert("Cheque payment not found.");
@@ -3328,8 +3338,8 @@ el.execOutstanding.textContent = formatCompactPeso(
     alert("Cheque marked as cleared.");
   }
 
-  async function markChequeBounced(paymentId) {
-    if (!canManageChequeRegister()) return;
+    async function markChequeBounced(paymentId) {
+    if (!ensureChequeActionAllowed(canBounceCheque, "You do not have permission to bounce cheques.")) return;
 
     const payment = state.payments.find((p) => p.id === paymentId);
     if (!payment) return alert("Cheque payment not found.");
@@ -3526,8 +3536,8 @@ el.execOutstanding.textContent = formatCompactPeso(
       }, 0)
     );
   }
-      function startChequeReplacement(paymentId) {
-    if (!canManageChequeRegister()) return;
+            function startChequeReplacement(paymentId) {
+    if (!ensureChequeActionAllowed(canReplaceBouncedCheque, "You do not have permission to record replacement cheques.")) return;
 
     const bouncedPayment = state.payments.find((p) => p.id === paymentId);
     if (!bouncedPayment) return alert("Bounced cheque payment not found.");
@@ -3597,36 +3607,38 @@ el.execOutstanding.textContent = formatCompactPeso(
         statusHtml = `<span class="notice-pill notice-postdated">Pending</span>`;
       }
 
-      let actionHtml = `<span class="muted">View only</span>`;
+            let actionHtml = `<span class="muted">View only</span>`;
 
-      if (canManageChequeRegister()) {
-        if (status === "Pending") {
-          actionHtml = `
-            <div class="row-actions">
-              <button class="btn btn-primary action-clear-cheque">Clear</button>
-              <button class="btn btn-danger action-bounce-cheque">Bounce</button>
-            </div>
-          `;
-        } else if (status === "Bounced") {
-          const replacementState = getReplacementStateForBouncedCheque(payment);
+      if (status === "Pending") {
+        const actionButtons = [];
 
-          if (replacementState.isFullyReplaced) {
-            actionHtml = `<span class="muted">Replacement Recorded</span>`;
-          } else {
-            actionHtml = `
-              <div class="row-actions">
-                <button class="btn btn-secondary action-replace-cheque">${escapeHtml(replacementState.buttonLabel)}</button>
-              </div>
-            `;
-          }
-        } else {
-          actionHtml = `<span class="muted">Completed</span>`;
+        if (canClearCheque()) {
+          actionButtons.push(`<button class="btn btn-primary action-clear-cheque">Clear</button>`);
         }
+
+        if (canBounceCheque()) {
+          actionButtons.push(`<button class="btn btn-danger action-bounce-cheque">Bounce</button>`);
+        }
+
+        actionHtml = actionButtons.length
+          ? `<div class="row-actions">${actionButtons.join("")}</div>`
+          : `<span class="muted">View only</span>`;
       } else if (status === "Bounced") {
         const replacementState = getReplacementStateForBouncedCheque(payment);
-        actionHtml = replacementState.isFullyReplaced
-          ? `<span class="muted">Replacement Recorded</span>`
-          : `<span class="muted">${escapeHtml(replacementState.buttonLabel)}</span>`;
+
+        if (replacementState.isFullyReplaced) {
+          actionHtml = `<span class="muted">Replacement Recorded</span>`;
+        } else if (canReplaceBouncedCheque()) {
+          actionHtml = `
+            <div class="row-actions">
+              <button class="btn btn-secondary action-replace-cheque">${escapeHtml(replacementState.buttonLabel)}</button>
+            </div>
+          `;
+        } else {
+          actionHtml = `<span class="muted">${escapeHtml(replacementState.buttonLabel)}</span>`;
+        }
+      } else if (canManageChequeRegister()) {
+        actionHtml = `<span class="muted">Completed</span>`;
       }
 
             row.innerHTML = `
