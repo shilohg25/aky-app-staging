@@ -1,8 +1,8 @@
 (function () {
   "use strict";
-const { supabaseClient, ACCOUNT_ADMIN_FUNCTION_URL, ROLE_PERMISSIONS, state, AKY_DOCUMENT_UTILS } = window;
+const { supabaseClient, ACCOUNT_ADMIN_FUNCTION_URL, ROLE_PERMISSIONS, state, AKY_DOCUMENT_UTILS, AKY_DOM_ELEMENTS } = window;
   
-  const el = mapElements();
+  const el = AKY_DOM_ELEMENTS.mapElements();
 
 window.addEventListener("load", () => {
   bindEvents();
