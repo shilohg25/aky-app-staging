@@ -727,7 +727,18 @@ textarea {
 .report-actions {
   margin-top: 14px;
 }
+#reportsView .report-table-scroll {
+  max-height: min(420px, 65vh);
+  overflow: auto;
+  border-radius: 14px;
+}
 
+#reportsView .report-table-scroll .records-table thead th {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  background: #f8fafc;
+}
 /* EXECUTIVE VIEW IMPROVEMENTS */
 .exec-filters {
   display: flex;
