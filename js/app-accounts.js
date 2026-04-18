@@ -94,20 +94,52 @@
       }
     }
 
+        function normalizeAccountsResponse(responseBody) {
+      const possibleLists = [
+        responseBody,
+        responseBody?.accounts,
+        responseBody?.data,
+        responseBody?.profiles,
+        responseBody?.items
+      ];
+
+      const rawAccounts = possibleLists.find(Array.isArray);
+
+      if (!rawAccounts) {
+        throw new Error("Account admin returned an invalid account list response.");
+      }
+
+      return rawAccounts.map((account) => ({
+        ...account,
+        email: account?.email ? String(account.email).trim().toLowerCase() : "",
+        username: account?.username ? String(account.username).trim() : "",
+        role: account?.role ? String(account.role).trim().toLowerCase() : "user"
+      }));
+    }
+
     async function loadAccounts() {
       ensureAccountsAccess();
 
-      const { data, error } = await supabaseClient
-        .from("profiles")
-        .select("*")
-        .order("created_at", { ascending: false });
+      let responseBody;
 
-      if (error) {
-        console.error("[AKY] Failed to load accounts.", error);
-        throw new Error(error.message || "Could not load accounts.");
+      try {
+        responseBody = await callAccountAdmin("listAccounts", {});
+      } catch (error) {
+        console.error("[AKY] Failed to load accounts via account-admin.", error);
+        throw new Error(
+          error?.message ||
+            "Could not load accounts from the admin endpoint."
+        );
       }
 
-      state.accounts = Array.isArray(data) ? data : [];
+      const accounts = normalizeAccountsResponse(responseBody);
+
+      state.accounts = accounts.sort((left, right) => {
+        const leftCreated = left?.created_at ? new Date(left.created_at).getTime() : 0;
+        const rightCreated = right?.created_at ? new Date(right.created_at).getTime() : 0;
+        return rightCreated - leftCreated;
+      });
+
       return state.accounts;
     }
 
