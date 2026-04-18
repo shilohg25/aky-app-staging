@@ -107,15 +107,38 @@
     if (value < 1024 * 1024) return `${(value / 1024).toFixed(1)} KB`;
     return `${(value / (1024 * 1024)).toFixed(2)} MB`;
   }
+async function fileToBase64(file) {
+  validateImageFile(file);
 
-  window.AKY_DOCUMENT_UTILS = Object.freeze({
-    IMAGE_UPLOAD_MAX_BYTES,
-    IMAGE_UPLOAD_MAX_LABEL,
-    validateImageFile,
-    applyPreviewFile,
-    resetPreviewState,
-    safeStorageFileName,
-    setStatusMessage,
-    formatBytes
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+
+    reader.onload = () => {
+      const result = String(reader.result || "");
+      const commaIndex = result.indexOf(",");
+      if (commaIndex === -1) {
+        reject(new Error("Could not convert file to base64."));
+        return;
+      }
+      resolve(result.slice(commaIndex + 1));
+    };
+
+    reader.onerror = () => {
+      reject(new Error("Could not convert file to base64."));
+    };
+
+    reader.readAsDataURL(file);
   });
+}
+  window.AKY_DOCUMENT_UTILS = Object.freeze({
+  IMAGE_UPLOAD_MAX_BYTES,
+  IMAGE_UPLOAD_MAX_LABEL,
+  validateImageFile,
+  applyPreviewFile,
+  resetPreviewState,
+  safeStorageFileName,
+  setStatusMessage,
+  formatBytes,
+  fileToBase64
+});
 })();
