@@ -49,7 +49,7 @@
     el.loginPassword?.addEventListener("keydown", submitLogin);
     el.logoutBtn?.addEventListener("click", logout);
     el.openChangePasswordBtn?.addEventListener("click", () => openChangePasswordModal(false));
-    el.saveOwnPasswordBtn?.addEventListener("click", () => runWithBusyState(el.saveOwnPasswordBtn, saveOwnPassword));
+    el.saveOwnPasswordBtn?.addEventListener("click", () => runWithBusyState(el.saveOwnPasswordBtn, "Saving...", saveOwnPassword));
     el.closeChangePasswordModalBtn?.addEventListener("click", () => {
       if (el.changePasswordModal?.dataset.force === "1") return;
       closeModal(el.changePasswordModal);
