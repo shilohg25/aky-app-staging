@@ -19,19 +19,34 @@
       documents: []
     };
 async function createCustomerDocumentViaServer(payload) {
-  const { data, error } = await supabaseClient.functions.invoke("customer-document-write", {
-    body: payload
-  });
+  const fallbackWrite = window.AKY_DOCUMENT_UTILS?.writeCustomerDocumentDirect;
 
-  if (error) {
-    throw new Error(error.message || "Customer document write failed.");
+  try {
+    const { data, error } = await supabaseClient.functions.invoke("customer-document-write", {
+      body: payload
+    });
+
+    if (error) {
+      throw error;
+    }
+
+    if (!data?.ok) {
+      throw new Error(data?.error || "Customer document write failed.");
+    }
+
+    return data;
+  } catch (error) {
+    console.warn("[AKY] customer-document-write failed. Falling back to direct document write.", error);
+
+    if (typeof fallbackWrite !== "function") {
+      throw new Error(error?.message || "Customer document write failed.");
+    }
+
+    return fallbackWrite({
+      supabaseClient,
+      payload
+    });
   }
-
-  if (!data?.ok) {
-    throw new Error(data?.error || "Customer document write failed.");
-  }
-
-  return data;
 }
     initDocumentVault();
 
