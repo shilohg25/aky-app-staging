@@ -3625,7 +3625,6 @@ function renderLogSortIndicators() {
 
     if (!customerId) {
       await loadAllData();
-      if (canManageAccounts()) await loadAccounts();
       renderCustomerList();
       renderCurrentCustomerDashboard();
       return;
@@ -3674,7 +3673,6 @@ function renderLogSortIndicators() {
 
   async function refreshAndRenderAll() {
     await loadAllData();
-    if (canManageAccounts()) await loadAccounts();
 
     renderCustomerList();
     renderCurrentCustomerDashboard();
