@@ -18,7 +18,21 @@
       currentCustomerId: null,
       documents: []
     };
+async function createCustomerDocumentViaServer(payload) {
+  const { data, error } = await supabaseClient.functions.invoke("customer-document-write", {
+    body: payload
+  });
 
+  if (error) {
+    throw new Error(error.message || "Customer document write failed.");
+  }
+
+  if (!data?.ok) {
+    throw new Error(data?.error || "Customer document write failed.");
+  }
+
+  return data;
+}
     initDocumentVault();
 
     function initDocumentVault() {
