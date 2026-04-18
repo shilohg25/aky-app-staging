@@ -119,14 +119,18 @@
     }
 
     async function refreshAccounts() {
-      try {
-        await loadAccounts();
-        renderAccountsView();
-      } catch (error) {
-        console.error("[AKY] Failed to refresh accounts.", error);
-        alert(error?.message || "Could not refresh accounts.");
-      }
-    }
+  try {
+    await loadAccounts();
+    renderAccountsView();
+  } catch (error) {
+    state.accountsLoadError = String(
+      error?.message || "Could not refresh accounts."
+    );
+    renderAccountsView();
+    console.error("[AKY] Failed to refresh accounts.", error);
+    alert(state.accountsLoadError);
+  }
+}
 
         function normalizeAccountsResponse(responseBody) {
       const possibleLists = [
@@ -152,30 +156,32 @@
     }
 
     async function loadAccounts() {
-      ensureAccountsAccess();
+  ensureAccountsAccess();
+  state.accountsLoadError = "";
 
-      let responseBody;
+  let responseBody;
 
-      try {
-        responseBody = await callAccountAdmin("listAccounts", {});
-      } catch (error) {
-        console.error("[AKY] Failed to load accounts via account-admin.", error);
-        throw new Error(
-          error?.message ||
-            "Could not load accounts from the admin endpoint."
-        );
-      }
+  try {
+    responseBody = await callAccountAdmin("listAccounts", {});
+  } catch (error) {
+    console.error("[AKY] Failed to load accounts via account-admin.", error);
+    throw new Error(
+      error?.message ||
+        "Could not load accounts from the admin endpoint."
+    );
+  }
 
-      const accounts = normalizeAccountsResponse(responseBody);
+  const accounts = normalizeAccountsResponse(responseBody);
 
-      state.accounts = accounts.sort((left, right) => {
-        const leftCreated = left?.created_at ? new Date(left.created_at).getTime() : 0;
-        const rightCreated = right?.created_at ? new Date(right.created_at).getTime() : 0;
-        return rightCreated - leftCreated;
-      });
+  state.accounts = accounts.sort((left, right) => {
+    const leftCreated = left?.created_at ? new Date(left.created_at).getTime() : 0;
+    const rightCreated = right?.created_at ? new Date(right.created_at).getTime() : 0;
+    return rightCreated - leftCreated;
+  });
 
-      return state.accounts;
-    }
+  state.accountsLoadError = "";
+  return state.accounts;
+}
 
     function getFilteredAccounts() {
       const query = String(el.accountSearch?.value || "").trim().toLowerCase();
@@ -202,54 +208,63 @@
     }
 
     function renderAccountsView() {
-      if (!el.accountsTableBody) return;
+  if (!el.accountsTableBody) return;
 
-      bindAccountTableEvents();
-      el.accountsTableBody.innerHTML = "";
+  bindAccountTableEvents();
+  el.accountsTableBody.innerHTML = "";
 
-      const accounts = getFilteredAccounts();
+  if (state.accountsLoadError) {
+    el.accountsTableBody.innerHTML = `
+      <tr>
+        <td colspan="7" class="muted">${escapeHtml(state.accountsLoadError)}</td>
+      </tr>
+    `;
+    return;
+  }
 
-      if (!accounts.length) {
-        el.accountsTableBody.innerHTML = `
-          <tr>
-            <td colspan="7" class="muted">No accounts found.</td>
-          </tr>
-        `;
-        return;
-      }
+  const accounts = getFilteredAccounts();
 
-      const rowsHtml = accounts
-        .map((account) => {
-          const isCurrentUser = account.id === state.currentProfile?.id;
-          const accountName = account.username || account.email || "-";
-          const createdAt = account.created_at ? formatDateTime(account.created_at) : "-";
-          const mustChangePassword = account.must_change_password ? "Yes" : "No";
-          const deleteDisabledAttr = isCurrentUser
-            ? 'disabled title="You cannot delete your own account while logged in."'
-            : "";
+  if (!accounts.length) {
+    el.accountsTableBody.innerHTML = `
+      <tr>
+        <td colspan="7" class="muted">No accounts found.</td>
+      </tr>
+    `;
+    return;
+  }
 
-          return `
-            <tr>
-              <td>${escapeHtml(accountName)}</td>
-              <td>${escapeHtml(account.email || "-")}</td>
-              <td>${escapeHtml(capitalizeRole(account.role || "user"))}</td>
-              <td>${escapeHtml(mustChangePassword)}</td>
-              <td>${escapeHtml(getAccountStatus(account))}</td>
-              <td>${escapeHtml(createdAt)}</td>
-              <td>
-                <div class="btn-row">
-                  <button class="btn btn-light" type="button" data-account-action="edit" data-account-id="${escapeHtml(account.id)}">Edit</button>
-                  <button class="btn btn-secondary" type="button" data-account-action="reset" data-account-id="${escapeHtml(account.id)}">Reset Password</button>
-                  <button class="btn btn-danger" type="button" data-account-action="delete" data-account-id="${escapeHtml(account.id)}" ${deleteDisabledAttr}>Delete</button>
-                </div>
-              </td>
-            </tr>
-          `;
-        })
-        .join("");
+  const rowsHtml = accounts
+    .map((account) => {
+      const isCurrentUser = account.id === state.currentProfile?.id;
+      const accountName = account.username || account.email || "-";
+      const createdAt = account.created_at ? formatDateTime(account.created_at) : "-";
+      const mustChangePassword = account.must_change_password ? "Yes" : "No";
+      const deleteDisabledAttr = isCurrentUser
+        ? 'disabled title="You cannot delete your own account while logged in."'
+        : "";
 
-      el.accountsTableBody.innerHTML = rowsHtml;
-    }
+      return `
+        <tr>
+          <td>${escapeHtml(accountName)}</td>
+          <td>${escapeHtml(account.email || "-")}</td>
+          <td>${escapeHtml(capitalizeRole(account.role || "user"))}</td>
+          <td>${escapeHtml(mustChangePassword)}</td>
+          <td>${escapeHtml(getAccountStatus(account))}</td>
+          <td>${escapeHtml(createdAt)}</td>
+          <td>
+            <div class="btn-row">
+              <button class="btn btn-light" type="button" data-account-action="edit" data-account-id="${escapeHtml(account.id)}">Edit</button>
+              <button class="btn btn-secondary" type="button" data-account-action="reset" data-account-id="${escapeHtml(account.id)}">Reset Password</button>
+              <button class="btn btn-danger" type="button" data-account-action="delete" data-account-id="${escapeHtml(account.id)}" ${deleteDisabledAttr}>Delete</button>
+            </div>
+          </td>
+        </tr>
+      `;
+    })
+    .join("");
+
+  el.accountsTableBody.innerHTML = rowsHtml;
+}
 
     function openCreateAccountModal() {
       try {
