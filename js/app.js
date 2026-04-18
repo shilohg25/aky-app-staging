@@ -1,6 +1,6 @@
 (function () {
   "use strict";
-  const {
+    const {
   supabaseClient,
   ACCOUNT_ADMIN_FUNCTION_URL,
   ROLE_PERMISSIONS,
@@ -9,7 +9,9 @@
   AKY_DOM_ELEMENTS,
   AKY_AI_DOCUMENT_ASSIST,
   AKY_CUSTOMER_DOCUMENT_VAULT,
-  AKY_STATE_INDEXES
+  AKY_STATE_INDEXES,
+  AKY_AUTH_SESSION,
+  AKY_STATE
 } = window;
 
   const el = AKY_DOM_ELEMENTS.mapElements();
@@ -266,31 +268,111 @@
     console.error("[AKY] AKY_APP_EVENTS.initAppEvents failed. Falling back to core auth bindings.", error);
   }
 
+    let authSession = null;
+
+  function initAuthSession() {
+    if (authSession) return authSession;
+
+    if (!AKY_AUTH_SESSION || typeof AKY_AUTH_SESSION.initAuthSession !== "function") {
+      console.error("[AKY] AKY_AUTH_SESSION.initAuthSession is unavailable in this build.");
+      return null;
+    }
+
+    authSession = AKY_AUTH_SESSION.initAuthSession({
+      supabaseClient,
+      getProfile,
+      shouldRefreshProfile,
+      applyAuthenticatedProfile,
+      clearAuthState,
+      redirectToLogin: showLogin
+    });
+
+    return authSession;
+  }
+
+  function shouldRefreshProfile(eventName, session) {
+    if (!session?.user?.id) return false;
+    if (!state.currentProfile?.id) return false;
+    if (state.currentProfile.id !== session.user.id) return false;
+
+    return (
+      eventName === "SIGNED_IN" ||
+      eventName === "TOKEN_REFRESHED" ||
+      eventName === "USER_UPDATED"
+    );
+  }
+
+  function clearAuthState() {
+    if (AKY_STATE && typeof AKY_STATE.resetAuthBoundState === "function") {
+      AKY_STATE.resetAuthBoundState(state);
+    } else {
+      state.currentProfile = null;
+      state.selectedCustomerId = null;
+    }
+
+    if (typeof customerDocumentVault?.clearDraft === "function") {
+      customerDocumentVault.clearDraft(true);
+    }
+
+    if (el.currentUserInfo) {
+      el.currentUserInfo.innerHTML = "";
+    }
+
+    if (el.changePasswordModal) {
+      el.changePasswordModal.dataset.force = "0";
+      closeModal(el.changePasswordModal);
+    }
+
+    if (el.loginPassword) {
+      el.loginPassword.value = "";
+    }
+  }
+
+  function applyAuthenticatedProfile(profile, options) {
+    state.currentProfile = profile;
+    renderCurrentUser();
+
+    if (options?.openChangePassword && profile?.must_change_password) {
+      openChangePasswordModal(true);
+    }
+  }
+
   window.addEventListener("load", () => {
     bindEvents();
+    initAuthSession();
     bootstrap();
   });
 
-    async function bootstrap() {
+      async function bootstrap() {
     if (!ensureSupabaseClientReady()) return;
 
     try {
       const { data, error } = await supabaseClient.auth.getSession();
-      if (error || !data.session?.user) {
-        showLogin();
+      const session = data?.session || null;
+
+      if (error || !session?.user) {
+        if (authSession && typeof authSession.handleSessionLoss === "function") {
+          authSession.handleSessionLoss();
+        } else {
+          clearAuthState();
+          showLogin();
+        }
         return;
       }
 
-            const profile = await getProfile(data.session.user.id);
+      const profile = await getProfile(session.user.id);
       if (!profile) {
-        await supabaseClient.auth.signOut();
-        state.currentProfile = null;
-        showLogin();
-        el.loginMessage.textContent = "Profile not found for this account.";
+        if (authSession && typeof authSession.signOut === "function") {
+          await authSession.signOut("Profile not found for this account.");
+        } else {
+          await supabaseClient.auth.signOut();
+          clearAuthState();
+          showLogin("Profile not found for this account.");
+        }
         return;
       }
 
-      state.currentProfile = profile;
+      applyAuthenticatedProfile(profile, { openChangePassword: false });
       await showApp();
 
       if (profile.must_change_password) {
@@ -298,8 +380,7 @@
       }
     } catch (error) {
       console.error(error);
-      showLogin();
-      el.loginMessage.textContent = error?.message || getStartupErrorMessage();
+      showLogin(error?.message || getStartupErrorMessage());
     }
   }
 
@@ -309,9 +390,13 @@
     return data;
   }
 
-  function showLogin() {
+    function showLogin(message) {
     el.loginScreen.classList.remove("hidden");
     el.appShell.classList.add("hidden");
+
+    if (typeof message === "string") {
+      el.loginMessage.textContent = message;
+    }
   }
 
     function renderLazyView(view) {
@@ -454,7 +539,7 @@
     }
     return invoice.invoice_number || "Invoice";
   }
-    async function login() {
+      async function login() {
     if (!ensureSupabaseClientReady()) return;
     if (el.loginBtn.dataset.busy === "1") return;
 
@@ -479,26 +564,28 @@
         return;
       }
 
-            const profile = await getProfile(data.user.id);
+      const profile = await getProfile(data.user.id);
       if (!profile) {
-        await supabaseClient.auth.signOut();
-        state.currentProfile = null;
-        showLogin();
-        el.loginMessage.textContent = "Profile not found for this account.";
+        if (authSession && typeof authSession.signOut === "function") {
+          await authSession.signOut("Profile not found for this account.");
+        } else {
+          await supabaseClient.auth.signOut();
+          clearAuthState();
+          showLogin("Profile not found for this account.");
+        }
         return;
       }
 
-      state.currentProfile = profile;
+      applyAuthenticatedProfile(profile, { openChangePassword: false });
       el.loginPassword.value = "";
       await showApp();
 
       if (profile.must_change_password) {
         openChangePasswordModal(true);
       }
-        } catch (error) {
+    } catch (error) {
       console.error(error);
-      showLogin();
-      el.loginMessage.textContent = error?.message || getStartupErrorMessage();
+      showLogin(error?.message || getStartupErrorMessage());
     } finally {
       el.loginBtn.dataset.busy = "0";
       el.loginBtn.disabled = false;
@@ -506,10 +593,16 @@
     }
   }
 
-  async function logout() {
+    async function logout() {
+    if (!ensureSupabaseClientReady()) return;
+
+    if (authSession && typeof authSession.signOut === "function") {
+      await authSession.signOut();
+      return;
+    }
+
     await supabaseClient.auth.signOut();
-    state.currentProfile = null;
-    state.selectedCustomerId = null;
+    clearAuthState();
     showLogin();
   }
 
@@ -530,56 +623,57 @@
     return "";
   }
 
-  async function saveOwnPassword() {
-  const password = el.newOwnPassword.value;
-  const confirm = el.confirmOwnPassword.value;
-  const validationError = validatePassword(password);
+    async function saveOwnPassword() {
+    const password = el.newOwnPassword.value;
+    const confirm = el.confirmOwnPassword.value;
+    const validationError = validatePassword(password);
 
-  if (validationError) return alert(validationError);
-  if (password !== confirm) return alert("Passwords do not match.");
+    if (validationError) return alert(validationError);
+    if (password !== confirm) return alert("Passwords do not match.");
 
-  const { data: sessionData, error: sessionError } = await supabaseClient.auth.getSession();
-  if (sessionError) return alert(sessionError.message);
+    const { data: sessionData, error: sessionError } = await supabaseClient.auth.getSession();
+    if (sessionError) return alert(sessionError.message);
 
-  let activeSession = sessionData.session || null;
+    let activeSession = sessionData.session || null;
 
-  if (!activeSession) {
-    const { data: refreshData, error: refreshError } = await supabaseClient.auth.refreshSession();
+    if (!activeSession) {
+      const { data: refreshData, error: refreshError } = await supabaseClient.auth.refreshSession();
 
-    if (refreshError) {
-      console.error(refreshError);
+      if (refreshError) {
+        console.error(refreshError);
+      }
+
+      activeSession = refreshData?.session || null;
     }
 
-    activeSession = refreshData?.session || null;
-  }
+    if (!activeSession) {
+      if (authSession && typeof authSession.handleSessionLoss === "function") {
+        authSession.handleSessionLoss({
+          message: "Your login session is missing. Please log in again using the temporary password, then change it immediately."
+        });
+      } else {
+        clearAuthState();
+        showLogin("Your login session is missing. Please log in again using the temporary password, then change it immediately.");
+      }
+      return;
+    }
 
-  if (!activeSession) {
-    await supabaseClient.auth.signOut();
-    state.currentProfile = null;
-    state.selectedCustomerId = null;
+    const { error: authError } = await supabaseClient.auth.updateUser({ password });
+    if (authError) return alert(authError.message);
+
+    const { error: profileError } = await supabaseClient
+      .from("profiles")
+      .update({ must_change_password: false })
+      .eq("id", state.currentProfile.id);
+
+    if (profileError) return alert(profileError.message);
+
+    state.currentProfile.must_change_password = false;
     el.changePasswordModal.dataset.force = "0";
     closeModal(el.changePasswordModal);
-    showLogin();
-    el.loginMessage.textContent = "Your login session is missing. Please log in again using the temporary password, then change it immediately.";
-    return;
+    renderCurrentUser();
+    alert("Password changed successfully.");
   }
-
-  const { error: authError } = await supabaseClient.auth.updateUser({ password });
-  if (authError) return alert(authError.message);
-
-  const { error: profileError } = await supabaseClient
-    .from("profiles")
-    .update({ must_change_password: false })
-    .eq("id", state.currentProfile.id);
-
-  if (profileError) return alert(profileError.message);
-
-  state.currentProfile.must_change_password = false;
-  el.changePasswordModal.dataset.force = "0";
-  closeModal(el.changePasswordModal);
-  renderCurrentUser();
-  alert("Password changed successfully.");
-}
 
     async function loadAllData() {
     if (!ensureSupabaseClientReady()) {
