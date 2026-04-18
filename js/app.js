@@ -1,6 +1,16 @@
 (function () {
   "use strict";
-  const { supabaseClient, ACCOUNT_ADMIN_FUNCTION_URL, ROLE_PERMISSIONS, state, AKY_DOCUMENT_UTILS, AKY_DOM_ELEMENTS, AKY_AI_DOCUMENT_ASSIST, AKY_CUSTOMER_DOCUMENT_VAULT } = window;
+  const {
+  supabaseClient,
+  ACCOUNT_ADMIN_FUNCTION_URL,
+  ROLE_PERMISSIONS,
+  state,
+  AKY_DOCUMENT_UTILS,
+  AKY_DOM_ELEMENTS,
+  AKY_AI_DOCUMENT_ASSIST,
+  AKY_CUSTOMER_DOCUMENT_VAULT,
+  AKY_STATE_INDEXES
+} = window;
 
   const el = AKY_DOM_ELEMENTS.mapElements();
 
@@ -659,10 +669,42 @@
     });
 
     state.customers = Array.from(customerMap.values());
+rebuildStateIndexes();
 
-    if (state.selectedCustomerId && !state.customers.some((c) => c.id === state.selectedCustomerId)) {
-      state.selectedCustomerId = null;
-    }
+if (state.selectedCustomerId && !getCustomerById(state.selectedCustomerId)) {
+  state.selectedCustomerId = null;
+}
+    function rebuildStateIndexes() {
+  state.indexes = AKY_STATE_INDEXES?.createStateIndexes?.(state) || null;
+}
+
+function getCustomerById(customerId) {
+  if (!customerId) return null;
+  return state.indexes?.customersById?.get(customerId)
+    || state.customers.find((customer) => customer.id === customerId)
+    || null;
+}
+
+function getInvoiceById(invoiceId) {
+  if (!invoiceId) return null;
+  return state.indexes?.invoicesById?.get(invoiceId)
+    || state.invoices.find((invoice) => invoice.id === invoiceId)
+    || null;
+}
+
+function getPaymentById(paymentId) {
+  if (!paymentId) return null;
+  return state.indexes?.paymentsById?.get(paymentId)
+    || state.payments.find((payment) => payment.id === paymentId)
+    || null;
+}
+
+function getPendingTbvByInvoiceId(invoiceId) {
+  if (!invoiceId) return null;
+  return state.indexes?.pendingTbvByInvoiceId?.get(invoiceId)
+    || state.tbvs.find((tbv) => tbv.invoice_id === invoiceId && tbv.status === "PENDING")
+    || null;
+}
   }
 
   function renderCurrentUser() {
@@ -2556,10 +2598,12 @@ function renderPaymentTable(customer) {
     .slice()
     .sort((a, b) => String(b.payment_date).localeCompare(String(a.payment_date)))
     .forEach((payment) => {
-      const appliedTo = (payment.allocations || []).map((alloc) => {
-        const invoice = state.invoices.find((inv) => inv.id === alloc.invoice_id);
-        return `${getInvoiceReferenceLabel(invoice)} (${formatPeso(getAllocationAmount(alloc))})`;
-      }).join(", ");
+      const appliedTo = (payment.allocations || [])
+        .map((alloc) => {
+          const invoice = getInvoiceById(alloc.invoice_id);
+          return `${getInvoiceReferenceLabel(invoice)} (${formatPeso(getAllocationAmount(alloc))})`;
+        })
+        .join(", ");
 
       const details = formatPaymentDetails(payment);
       const row = document.createElement("tr");
@@ -2606,21 +2650,25 @@ el.execOutstanding.textContent = formatCompactPeso(
       el.agingTableBody.innerHTML = `<tr><td colspan="7" class="muted">No 90+ day overdue invoices.</td></tr>`;
       return;
     }
-    overdueInvoices.sort((a, b) => getDaysOpen(b.invoice_date) - getDaysOpen(a.invoice_date)).forEach((invoice) => {
-      const customer = state.customers.find((c) => c.id === invoice.customer_id);
-      const tbv = state.tbvs.find((t) => t.invoice_id === invoice.id && t.status === "PENDING");
-      const row = document.createElement("tr");
-      row.innerHTML = `
-          <td>${escapeHtml(customer?.name || "-")}</td>
-          <td>${escapeHtml(invoice.invoice_number)}</td>
-          <td>${escapeHtml(invoice.invoice_date)}</td>
-          <td>${getDaysOpen(invoice.invoice_date)}</td>
-          <td>${formatPeso(invoice.balance)}</td>
-          <td>${statusPill(invoice.status)}</td>
-          <td>${tbv ? `<span class="notice-pill notice-postdated">PENDING</span>` : "-"}</td>
-      `;
-      el.agingTableBody.appendChild(row);
-    });
+    overdueInvoices
+  .sort((a, b) => getDaysOpen(b.invoice_date) - getDaysOpen(a.invoice_date))
+  .forEach((invoice) => {
+    const customer = getCustomerById(invoice.customer_id);
+    const tbv = getPendingTbvByInvoiceId(invoice.id);
+    const row = document.createElement("tr");
+
+    row.innerHTML = `
+      <td>${escapeHtml(customer?.name || "-")}</td>
+      <td>${escapeHtml(invoice.invoice_number)}</td>
+      <td>${escapeHtml(invoice.invoice_date)}</td>
+      <td>${getDaysOpen(invoice.invoice_date)}</td>
+      <td>${formatPeso(invoice.balance)}</td>
+      <td>${statusPill(invoice.status)}</td>
+      <td>${tbv ? `<span class="notice-pill notice-postdated">PENDING</span>` : "-"}</td>
+    `;
+
+    el.agingTableBody.appendChild(row);
+  });
   }
 
   function ensurePostDatedChequesPanel() {
@@ -3070,42 +3118,42 @@ el.execOutstanding.textContent = formatCompactPeso(
     });
   }
     function getFilteredTbvRows() {
-    const statusFilter = el.notificationTbvStatusFilter?.value || "";
-    const invoiceSearch = (el.notificationTbvInvoiceSearch?.value || "").trim().toLowerCase();
+  const statusFilter = el.notificationTbvStatusFilter?.value || "";
+  const invoiceSearch = (el.notificationTbvInvoiceSearch?.value || "").trim().toLowerCase();
 
-    return state.tbvs
-      .slice()
-      .sort((a, b) => String(b.created_at).localeCompare(String(a.created_at)))
-      .map((tbv) => {
-        const invoice = state.invoices.find((x) => x.id === tbv.invoice_id);
-        const customer = state.customers.find((c) => c.id === invoice?.customer_id);
-        const requestedByRole = capitalizeRole(tbv.requested_by_role || "");
-        const requestedByDisplay = tbv.requested_by_name
-          ? (requestedByRole ? `${tbv.requested_by_name} (${requestedByRole})` : tbv.requested_by_name)
-          : "-";
+  return state.tbvs
+    .slice()
+    .sort((a, b) => String(b.created_at).localeCompare(String(a.created_at)))
+    .map((tbv) => {
+      const invoice = getInvoiceById(tbv.invoice_id);
+      const customer = getCustomerById(invoice?.customer_id);
+      const requestedByRole = capitalizeRole(tbv.requested_by_role || "");
+      const requestedByDisplay = tbv.requested_by_name
+        ? (requestedByRole ? `${tbv.requested_by_name} (${requestedByRole})` : tbv.requested_by_name)
+        : "-";
 
-        return {
-          tbvId: tbv.id,
-          createdAtDisplay: tbv.created_at ? formatDateTime(tbv.created_at) : "-",
-          customerName: customer?.name || "-",
-          invoiceNumber: invoice?.invoice_number || "-",
-          invoiceStatusText: invoice?.status || "-",
-          invoiceStatusHtml: invoice ? statusPill(invoice.status) : "-",
-          requestedByDisplay,
-          explanation: tbv.explanation || "-",
-          tbvStatus: tbv.status || "-",
-          decisionDateDisplay: tbv.decided_at ? formatDateTime(tbv.decided_at) : "-",
-          decidedBy: tbv.decided_by_name || "-",
-          decisionNotes: tbv.decision_notes || "-",
-          canReview: tbv.status === "PENDING" && canApproveTbv()
-        };
-      })
-      .filter((row) => {
-        if (statusFilter && row.tbvStatus !== statusFilter) return false;
-        if (invoiceSearch && !String(row.invoiceNumber || "").toLowerCase().includes(invoiceSearch)) return false;
-        return true;
-      });
-  }
+      return {
+        tbvId: tbv.id,
+        createdAtDisplay: tbv.created_at ? formatDateTime(tbv.created_at) : "-",
+        customerName: customer?.name || "-",
+        invoiceNumber: invoice?.invoice_number || "-",
+        invoiceStatusText: invoice?.status || "-",
+        invoiceStatusHtml: invoice ? statusPill(invoice.status) : "-",
+        requestedByDisplay,
+        explanation: tbv.explanation || "-",
+        tbvStatus: tbv.status || "-",
+        decisionDateDisplay: tbv.decided_at ? formatDateTime(tbv.decided_at) : "-",
+        decidedBy: tbv.decided_by_name || "-",
+        decisionNotes: tbv.decision_notes || "-",
+        canReview: tbv.status === "PENDING" && canApproveTbv()
+      };
+    })
+    .filter((row) => {
+      if (statusFilter && row.tbvStatus !== statusFilter) return false;
+      if (invoiceSearch && !String(row.invoiceNumber || "").toLowerCase().includes(invoiceSearch)) return false;
+      return true;
+    });
+}
 
   function renderTbvRequestsTable() {
     if (!el.tbvTableBody) return;
@@ -3179,17 +3227,19 @@ el.execOutstanding.textContent = formatCompactPeso(
       el.notificationsOverdueBody.innerHTML = `<tr><td colspan="5" class="muted">No overdue invoices.</td></tr>`;
     } else {
       overdue.forEach((invoice) => {
-        const customer = state.customers.find((c) => c.id === invoice.customer_id);
-        const row = document.createElement("tr");
-        row.innerHTML = `
-          <td>${escapeHtml(customer?.name || "-")}</td>
-          <td>${escapeHtml(invoice.invoice_number)}</td>
-          <td>${escapeHtml(invoice.invoice_date)}</td>
-          <td>${getDaysOpen(invoice.invoice_date)}</td>
-          <td>${formatPeso(invoice.balance)}</td>
-        `;
-        el.notificationsOverdueBody.appendChild(row);
-      });
+  const customer = getCustomerById(invoice.customer_id);
+  const row = document.createElement("tr");
+
+  row.innerHTML = `
+    <td>${escapeHtml(customer?.name || "-")}</td>
+    <td>${escapeHtml(invoice.invoice_number)}</td>
+    <td>${escapeHtml(invoice.invoice_date)}</td>
+    <td>${getDaysOpen(invoice.invoice_date)}</td>
+    <td>${formatPeso(invoice.balance)}</td>
+  `;
+
+  el.notificationsOverdueBody.appendChild(row);
+});
     }
   }
 
