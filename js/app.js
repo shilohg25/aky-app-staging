@@ -624,8 +624,13 @@
     }
   }
 
-  function hydrateData() {
-    const customerMap = new Map(state.customers.map((c) => [c.id, { ...c, contacts: [], invoices: [], payments: [] }]));
+    function hydrateData() {
+    const customerMap = new Map(
+      state.customers.map((customer) => [
+        customer.id,
+        { ...customer, contacts: [], invoices: [], payments: [] }
+      ])
+    );
 
     state.contacts.forEach((contact) => {
       const customer = customerMap.get(contact.customer_id);
@@ -634,77 +639,103 @@
 
     const invoiceItemMap = new Map();
     state.invoiceItems.forEach((item) => {
-      if (!invoiceItemMap.has(item.invoice_id)) invoiceItemMap.set(item.invoice_id, []);
+      if (!invoiceItemMap.has(item.invoice_id)) {
+        invoiceItemMap.set(item.invoice_id, []);
+      }
       invoiceItemMap.get(item.invoice_id).push(item);
     });
 
     const paymentAllocMap = new Map();
     state.allocations.forEach((alloc) => {
-      if (!paymentAllocMap.has(alloc.payment_id)) paymentAllocMap.set(alloc.payment_id, []);
+      if (!paymentAllocMap.has(alloc.payment_id)) {
+        paymentAllocMap.set(alloc.payment_id, []);
+      }
       paymentAllocMap.get(alloc.payment_id).push(alloc);
     });
 
-    state.invoices = state.invoices.map((inv) => {
-      const items = invoiceItemMap.get(inv.id) || [];
+    state.invoices = state.invoices.map((invoice) => {
+      const items = invoiceItemMap.get(invoice.id) || [];
       return {
-        ...inv,
+        ...invoice,
         items,
-        total: Number(inv.total_amount || 0),
-        paidAmount: Number(inv.paid_amount || 0),
-        balance: Number(inv.balance_amount || 0),
-        status: getPrimaryStatus(Number(inv.balance_amount || 0), Number(inv.total_amount || 0))
+        total: Number(invoice.total_amount || 0),
+        paidAmount: Number(invoice.paid_amount || 0),
+        balance: Number(invoice.balance_amount || 0),
+        status: getPrimaryStatus(
+          Number(invoice.balance_amount || 0),
+          Number(invoice.total_amount || 0)
+        )
       };
     });
 
-    state.payments = state.payments.map((p) => ({ ...p, allocations: paymentAllocMap.get(p.id) || [] }));
+    state.payments = state.payments.map((payment) => ({
+      ...payment,
+      allocations: paymentAllocMap.get(payment.id) || []
+    }));
 
-        state.invoices.forEach((invoice) => {
+    state.invoices.forEach((invoice) => {
       const customer = customerMap.get(invoice.customer_id);
-      if (customer && !isVoidedInvoice(invoice)) customer.invoices.push(invoice);
+      if (customer && !isVoidedInvoice(invoice)) {
+        customer.invoices.push(invoice);
+      }
     });
 
     state.payments.forEach((payment) => {
       const customer = customerMap.get(payment.customer_id);
-      if (customer) customer.payments.push(payment);
+      if (customer) {
+        customer.payments.push(payment);
+      }
     });
 
     state.customers = Array.from(customerMap.values());
-rebuildStateIndexes();
 
-if (state.selectedCustomerId && !getCustomerById(state.selectedCustomerId)) {
-  state.selectedCustomerId = null;
-}
-    function rebuildStateIndexes() {
-  state.indexes = AKY_STATE_INDEXES?.createStateIndexes?.(state) || null;
-}
+    rebuildStateIndexes();
 
-function getCustomerById(customerId) {
-  if (!customerId) return null;
-  return state.indexes?.customersById?.get(customerId)
-    || state.customers.find((customer) => customer.id === customerId)
-    || null;
-}
+    if (state.selectedCustomerId && !getCustomerById(state.selectedCustomerId)) {
+      state.selectedCustomerId = null;
+    }
+  }
 
-function getInvoiceById(invoiceId) {
-  if (!invoiceId) return null;
-  return state.indexes?.invoicesById?.get(invoiceId)
-    || state.invoices.find((invoice) => invoice.id === invoiceId)
-    || null;
-}
+  function rebuildStateIndexes() {
+    state.indexes = AKY_STATE_INDEXES?.createStateIndexes?.(state) || null;
+  }
 
-function getPaymentById(paymentId) {
-  if (!paymentId) return null;
-  return state.indexes?.paymentsById?.get(paymentId)
-    || state.payments.find((payment) => payment.id === paymentId)
-    || null;
-}
+  function getCustomerById(customerId) {
+    if (!customerId) return null;
+    return (
+      state.indexes?.customersById?.get(customerId) ||
+      state.customers.find((customer) => customer.id === customerId) ||
+      null
+    );
+  }
 
-function getPendingTbvByInvoiceId(invoiceId) {
-  if (!invoiceId) return null;
-  return state.indexes?.pendingTbvByInvoiceId?.get(invoiceId)
-    || state.tbvs.find((tbv) => tbv.invoice_id === invoiceId && tbv.status === "PENDING")
-    || null;
-}
+  function getInvoiceById(invoiceId) {
+    if (!invoiceId) return null;
+    return (
+      state.indexes?.invoicesById?.get(invoiceId) ||
+      state.invoices.find((invoice) => invoice.id === invoiceId) ||
+      null
+    );
+  }
+
+  function getPaymentById(paymentId) {
+    if (!paymentId) return null;
+    return (
+      state.indexes?.paymentsById?.get(paymentId) ||
+      state.payments.find((payment) => payment.id === paymentId) ||
+      null
+    );
+  }
+
+  function getPendingTbvByInvoiceId(invoiceId) {
+    if (!invoiceId) return null;
+    return (
+      state.indexes?.pendingTbvByInvoiceId?.get(invoiceId) ||
+      state.tbvs.find(
+        (tbv) => tbv.invoice_id === invoiceId && tbv.status === "PENDING"
+      ) ||
+      null
+    );
   }
 
   function renderCurrentUser() {
