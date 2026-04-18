@@ -1753,57 +1753,39 @@ function setInvoiceDocumentStatus(message, isError) {
 function invoiceDocumentSafeFileName(fileName) {
   return AKY_DOCUMENT_UTILS.safeStorageFileName(fileName, "invoice-document.png");
 }
+async function createCustomerDocumentViaServer(payload) {
+  const { data, error } = await supabaseClient.functions.invoke("customer-document-write", {
+    body: payload
+  });
 
+  if (error) {
+    throw new Error(error.message || "Customer document write failed.");
+  }
+
+  if (!data?.ok) {
+    throw new Error(data?.error || "Customer document write failed.");
+  }
+
+  return data;
+}
 async function saveInvoiceDocumentToVault({ customerId, invoiceId, invoiceNumber, notes }) {
   if (!invoiceDocumentState.file) return false;
 
-  const { data: authData, error: authError } = await supabaseClient.auth.getUser();
-  if (authError || !authData?.user?.id) {
-    throw new Error("Could not identify the signed-in user for the invoice document.");
-  }
-
-  const invoiceNumberKey = normalizeInvoiceNumberForKey(invoiceNumber) || `invoice-${Date.now()}`;
-  const safeOriginalName = invoiceDocumentSafeFileName(invoiceDocumentState.file.name);
-  const storagePath = `${customerId}/${new Date().toISOString().slice(0, 10)}/invoice-${invoiceNumberKey}-${Date.now()}-${safeOriginalName}`;
-
-  const { error: uploadError } = await supabaseClient.storage
-    .from("customer-documents")
-    .upload(storagePath, invoiceDocumentState.file, {
-      cacheControl: "3600",
-      upsert: false,
-      contentType: invoiceDocumentState.file.type || "image/png"
-    });
-
-  if (uploadError) {
-    throw new Error(uploadError.message || "Invoice document upload failed.");
-  }
-
-  const { error: insertError } = await supabaseClient
-    .from("customer_documents")
-    .insert({
-      customer_id: customerId,
-      invoice_id: invoiceId,
-      payment_id: null,
-      origin_screen: "invoice_modal",
-      category: "invoice",
-      title: invoiceNumber,
-      reference_code: invoiceNumber,
-      notes: notes || null,
-      file_name: invoiceDocumentState.file.name,
-      mime_type: invoiceDocumentState.file.type || "image/png",
-      file_size: invoiceDocumentState.file.size,
-      storage_path: storagePath,
-      source: invoiceDocumentState.source,
-      uploaded_by: authData.user.id
-    });
-
-  if (insertError) {
-    await supabaseClient.storage.from("customer-documents").remove([storagePath]);
-    throw new Error(insertError.message || "Invoice document record could not be saved.");
-  }
+  const result = await createCustomerDocumentViaServer({
+    action: "create_invoice_document",
+    customer_id: customerId,
+    invoice_id: invoiceId,
+    invoice_number: invoiceNumber,
+    notes: notes || null,
+    source: invoiceDocumentState.source,
+    file_name: invoiceDocumentState.file.name,
+    mime_type: invoiceDocumentState.file.type || "image/png",
+    file_size: invoiceDocumentState.file.size,
+    file_base64: await AKY_DOCUMENT_UTILS.fileToBase64(invoiceDocumentState.file)
+  });
 
   clearInvoiceDocumentDraft(true);
-  return true;
+  return !!result?.document_id;
 }
 
 initInvoiceDocumentFlow();
