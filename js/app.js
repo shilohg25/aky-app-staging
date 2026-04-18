@@ -2369,62 +2369,31 @@ async function saveInvoice() {
   }
 
   async function savePaymentDocumentToVault({ customer, payment, details, method }) {
-    if (!paymentDocumentState.file) return false;
+  if (!paymentDocumentState.file) return false;
 
-    const { data: authData, error: authError } = await supabaseClient.auth.getUser();
-    if (authError || !authData?.user?.id) {
-      throw new Error("Could not identify the signed-in user for the payment document.");
-    }
+  const { referenceCode, title } = buildPaymentDocumentMeta(payment, details, method);
 
-    const safeOriginalName = paymentDocumentSafeFileName(paymentDocumentState.file.name);
-    const storagePath = `${customer.id}/${new Date().toISOString().slice(0, 10)}/payment-${payment.id}-${Date.now()}-${safeOriginalName}`;
-    const { referenceCode, title } = buildPaymentDocumentMeta(payment, details, method);
+  const result = await createCustomerDocumentViaServer({
+    action: "create_payment_document",
+    customer_id: customer.id,
+    payment_id: payment.id,
+    payment_method: method,
+    payment_reference_code: referenceCode,
+    payment_title: title,
+    source: paymentDocumentState.source,
+    file_name: paymentDocumentState.file.name,
+    mime_type: paymentDocumentState.file.type || "image/png",
+    file_size: paymentDocumentState.file.size,
+    file_base64: await AKY_DOCUMENT_UTILS.fileToBase64(paymentDocumentState.file)
+  });
 
-    const { error: uploadError } = await supabaseClient.storage
-      .from("customer-documents")
-      .upload(storagePath, paymentDocumentState.file, {
-        cacheControl: "3600",
-        upsert: false,
-        contentType: paymentDocumentState.file.type || "image/png"
-      });
-
-    if (uploadError) {
-      throw new Error(uploadError.message || "Payment document upload failed.");
-    }
-
-    const { data: insertedDoc, error: insertError } = await supabaseClient
-      .from("customer_documents")
-      .insert({
-        customer_id: customer.id,
-        invoice_id: null,
-        payment_id: payment.id,
-        origin_screen: "payment_modal",
-        category: "payment_proof",
-        title,
-        reference_code: referenceCode,
-        notes: null,
-        file_name: paymentDocumentState.file.name,
-        mime_type: paymentDocumentState.file.type || "image/png",
-        file_size: paymentDocumentState.file.size,
-        storage_path: storagePath,
-        source: paymentDocumentState.source,
-        uploaded_by: authData.user.id
-      })
-      .select("id")
-      .single();
-
-    if (insertError || !insertedDoc?.id) {
-      await supabaseClient.storage.from("customer-documents").remove([storagePath]);
-      throw new Error(insertError?.message || "Payment document record could not be saved.");
-    }
-
-    if (typeof loadCustomerDocuments === "function") {
-      await loadCustomerDocuments();
-    }
-
-    clearPaymentDocumentDraft(true);
-    return true;
+  if (typeof loadCustomerDocuments === "function") {
+    await loadCustomerDocuments();
   }
+
+  clearPaymentDocumentDraft(true);
+  return !!result?.document_id;
+}
 
   initPaymentDocumentFlow();
 
