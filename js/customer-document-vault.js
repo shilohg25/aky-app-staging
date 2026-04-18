@@ -361,46 +361,19 @@ async function createCustomerDocumentViaServer(payload) {
         }
         if (clearBtn) clearBtn.disabled = true;
 
-        const { data: authData, error: authError } = await supabaseClient.auth.getUser();
-        if (authError || !authData?.user?.id) {
-          throw new Error("Could not identify the signed-in user.");
-        }
-
-        const safeFileName = docVaultSafeFileName(documentVaultState.file.name);
-        const storagePath = `${customer.id}/${new Date().toISOString().slice(0, 10)}/${crypto.randomUUID()}-${safeFileName}`;
-
-        const { error: uploadError } = await supabaseClient.storage
-          .from("customer-documents")
-          .upload(storagePath, documentVaultState.file, {
-            cacheControl: "3600",
-            upsert: false,
-            contentType: documentVaultState.file.type || "image/png"
-          });
-
-        if (uploadError) {
-          throw new Error(uploadError.message || "Storage upload failed.");
-        }
-
-        const { error: insertError } = await supabaseClient
-          .from("customer_documents")
-          .insert({
-            customer_id: customer.id,
-            category,
-            title,
-            reference_code: referenceCode,
-            notes,
-            file_name: documentVaultState.file.name,
-            mime_type: documentVaultState.file.type || "image/png",
-            file_size: documentVaultState.file.size,
-            storage_path: storagePath,
-            source: documentVaultState.source,
-            uploaded_by: authData.user.id
-          });
-
-        if (insertError) {
-          await supabaseClient.storage.from("customer-documents").remove([storagePath]);
-          throw new Error(insertError.message || "Database save failed.");
-        }
+        await createCustomerDocumentViaServer({
+  action: "create_customer_document",
+  customer_id: customer.id,
+  category,
+  title,
+  reference_code: referenceCode,
+  notes,
+  source: documentVaultState.source,
+  file_name: documentVaultState.file.name,
+  mime_type: documentVaultState.file.type || "image/png",
+  file_size: documentVaultState.file.size,
+  file_base64: await AKY_DOCUMENT_UTILS.fileToBase64(documentVaultState.file)
+});
 
         clearDocumentVaultDraft(true);
         await loadCustomerDocuments();
