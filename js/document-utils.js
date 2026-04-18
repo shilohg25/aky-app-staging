@@ -107,38 +107,248 @@
     if (value < 1024 * 1024) return `${(value / 1024).toFixed(1)} KB`;
     return `${(value / (1024 * 1024)).toFixed(2)} MB`;
   }
-async function fileToBase64(file) {
-  validateImageFile(file);
 
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
+  async function fileToBase64(file) {
+    validateImageFile(file);
 
-    reader.onload = () => {
-      const result = String(reader.result || "");
-      const commaIndex = result.indexOf(",");
-      if (commaIndex === -1) {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+
+      reader.onload = () => {
+        const result = String(reader.result || "");
+        const commaIndex = result.indexOf(",");
+        if (commaIndex === -1) {
+          reject(new Error("Could not convert file to base64."));
+          return;
+        }
+        resolve(result.slice(commaIndex + 1));
+      };
+
+      reader.onerror = () => {
         reject(new Error("Could not convert file to base64."));
-        return;
+      };
+
+      reader.readAsDataURL(file);
+    });
+  }
+
+  function base64ToUint8Array(base64) {
+    const normalized = String(base64 || "").trim();
+    if (!normalized) {
+      throw new Error("Missing file content.");
+    }
+
+    const binary = atob(normalized);
+    const bytes = new Uint8Array(binary.length);
+
+    for (let index = 0; index < binary.length; index += 1) {
+      bytes[index] = binary.charCodeAt(index);
+    }
+
+    return bytes;
+  }
+
+  function buildCustomerDocumentStoragePath(options) {
+    const {
+      customerId,
+      category,
+      linkedId,
+      fileName
+    } = options || {};
+
+    const safeName = safeStorageFileName(fileName, "document.png");
+    const safeCustomerId = String(customerId || "unknown-customer");
+    const safeCategory = String(category || "other").trim() || "other";
+    const safeLinkedId = linkedId ? String(linkedId).trim() : "";
+    const stamp = `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+
+    const parts = ["customers", safeCustomerId, safeCategory];
+    if (safeLinkedId) {
+      parts.push(safeLinkedId);
+    }
+    parts.push(`${stamp}-${safeName}`);
+
+    return parts.join("/");
+  }
+
+  function buildCustomerDocumentInsertPayload(payload, storagePath) {
+    const action = String(payload?.action || "");
+    const customerId = payload?.customer_id || null;
+    const fileName = payload?.file_name || "document.png";
+    const mimeType = payload?.mime_type || "image/png";
+    const fileSize = Number(payload?.file_size || 0);
+    const source = payload?.source || "upload";
+    const notes = payload?.notes || null;
+
+    if (!customerId) {
+      throw new Error("Missing customer_id.");
+    }
+
+    if (!storagePath) {
+      throw new Error("Missing storage path.");
+    }
+
+    if (action === "create_invoice_document") {
+      return {
+        customer_id: customerId,
+        invoice_id: payload.invoice_id || null,
+        category: "invoice",
+        title: payload.invoice_number || fileName,
+        reference_code: payload.invoice_number || null,
+        notes,
+        source,
+        file_name: fileName,
+        mime_type: mimeType,
+        file_size: fileSize,
+        storage_path: storagePath
+      };
+    }
+
+    if (action === "create_payment_document") {
+      return {
+        customer_id: customerId,
+        payment_id: payload.payment_id || null,
+        category: "payment_proof",
+        title: payload.payment_title || fileName,
+        reference_code: payload.payment_reference_code || null,
+        notes,
+        source,
+        file_name: fileName,
+        mime_type: mimeType,
+        file_size: fileSize,
+        storage_path: storagePath
+      };
+    }
+
+    if (action === "create_customer_document") {
+      return {
+        customer_id: customerId,
+        category: payload.category || "other",
+        title: payload.title || fileName,
+        reference_code: payload.reference_code || null,
+        notes,
+        source,
+        file_name: fileName,
+        mime_type: mimeType,
+        file_size: fileSize,
+        storage_path: storagePath
+      };
+    }
+
+    throw new Error("Unsupported customer document action.");
+  }
+
+  async function writeCustomerDocumentDirect(options) {
+    const {
+      supabaseClient,
+      payload
+    } = options || {};
+
+    if (!supabaseClient) {
+      throw new Error("Supabase client is unavailable.");
+    }
+
+    const action = String(payload?.action || "");
+
+    if (action === "delete_customer_document") {
+      const { data: existingDoc, error: fetchError } = await supabaseClient
+        .from("customer_documents")
+        .select("id, storage_path")
+        .eq("id", payload.document_id)
+        .maybeSingle();
+
+      if (fetchError) {
+        throw new Error(fetchError.message || "Could not find document.");
       }
-      resolve(result.slice(commaIndex + 1));
-    };
 
-    reader.onerror = () => {
-      reject(new Error("Could not convert file to base64."));
-    };
+      if (!existingDoc?.id) {
+        throw new Error("Document not found.");
+      }
 
-    reader.readAsDataURL(file);
-  });
-}
+      if (existingDoc.storage_path) {
+        const { error: storageError } = await supabaseClient.storage
+          .from("customer-documents")
+          .remove([existingDoc.storage_path]);
+
+        if (storageError) {
+          console.warn("[AKY] customer document storage remove warning:", storageError);
+        }
+      }
+
+      const { error: deleteError } = await supabaseClient
+        .from("customer_documents")
+        .delete()
+        .eq("id", existingDoc.id);
+
+      if (deleteError) {
+        throw new Error(deleteError.message || "Could not delete document.");
+      }
+
+      return {
+        ok: true,
+        document_id: existingDoc.id
+      };
+    }
+
+    const fileBytes = base64ToUint8Array(payload?.file_base64);
+    const storageCategory =
+      action === "create_invoice_document"
+        ? "invoice"
+        : action === "create_payment_document"
+          ? "payment_proof"
+          : (payload?.category || "other");
+
+    const linkedId = payload?.invoice_id || payload?.payment_id || null;
+    const storagePath = buildCustomerDocumentStoragePath({
+      customerId: payload?.customer_id,
+      category: storageCategory,
+      linkedId,
+      fileName: payload?.file_name
+    });
+
+    const { error: uploadError } = await supabaseClient.storage
+      .from("customer-documents")
+      .upload(storagePath, fileBytes, {
+        contentType: payload?.mime_type || "image/png",
+        upsert: false
+      });
+
+    if (uploadError) {
+      throw new Error(uploadError.message || "Could not upload document.");
+    }
+
+    const insertPayload = buildCustomerDocumentInsertPayload(payload, storagePath);
+
+    const { data: insertedDoc, error: insertError } = await supabaseClient
+      .from("customer_documents")
+      .insert(insertPayload)
+      .select("id")
+      .single();
+
+    if (insertError) {
+      await supabaseClient.storage
+        .from("customer-documents")
+        .remove([storagePath]);
+
+      throw new Error(insertError.message || "Could not save document record.");
+    }
+
+    return {
+      ok: true,
+      document_id: insertedDoc.id
+    };
+  }
+
   window.AKY_DOCUMENT_UTILS = Object.freeze({
-  IMAGE_UPLOAD_MAX_BYTES,
-  IMAGE_UPLOAD_MAX_LABEL,
-  validateImageFile,
-  applyPreviewFile,
-  resetPreviewState,
-  safeStorageFileName,
-  setStatusMessage,
-  formatBytes,
-  fileToBase64
-});
+    IMAGE_UPLOAD_MAX_BYTES,
+    IMAGE_UPLOAD_MAX_LABEL,
+    validateImageFile,
+    applyPreviewFile,
+    resetPreviewState,
+    safeStorageFileName,
+    setStatusMessage,
+    formatBytes,
+    fileToBase64,
+    writeCustomerDocumentDirect
+  });
 })();
