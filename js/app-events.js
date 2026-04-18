@@ -80,9 +80,20 @@
       return () => runWithBusyState(button, busyText, work);
     }
 
-    function bindModalClose(button, modal) {
-      onClick(button, () => closeModal(modal));
-    }
+    function canCloseModal(modal) {
+  if (!modal) return false;
+  if (modal === el.changePasswordModal && el.changePasswordModal?.dataset.force === "1") {
+    return false;
+  }
+  return true;
+}
+
+function bindModalClose(button, modal) {
+  onClick(button, () => {
+    if (!canCloseModal(modal)) return;
+    closeModal(modal);
+  });
+}
 
     function clearExecutiveFilters() {
       if (el.execDateFrom) el.execDateFrom.value = "";
@@ -223,52 +234,52 @@
       });
 
       [
-        el.customerModal,
-        el.invoiceModal,
-        el.invoiceViewModal,
-        el.paymentViewModal,
-        el.paymentTypeModal,
-        el.invoiceSelectionModal,
-        el.partialPaymentModal,
-        el.paymentMethodModal,
-        el.changePasswordModal,
-        el.tbvModal,
-        el.tbvDecisionModal,
-        el.soaModal,
-        el.accountModal,
-        el.resetPasswordModal
-      ].forEach((modal) => {
-        on(modal, "click", (event) => {
-          if (event.target === modal) {
-            closeModal(modal);
-          }
-        });
-      });
+  el.customerModal,
+  el.invoiceModal,
+  el.invoiceViewModal,
+  el.paymentViewModal,
+  el.paymentTypeModal,
+  el.invoiceSelectionModal,
+  el.partialPaymentModal,
+  el.paymentMethodModal,
+  el.changePasswordModal,
+  el.tbvModal,
+  el.tbvDecisionModal,
+  el.soaModal,
+  el.accountModal,
+  el.resetPasswordModal
+].forEach((modal) => {
+  on(modal, "click", (event) => {
+    if (event.target !== modal) return;
+    if (!canCloseModal(modal)) return;
+    closeModal(modal);
+  });
+});
 
       on(document, "keydown", (event) => {
-        if (event.key !== "Escape") return;
+  if (event.key !== "Escape") return;
 
-        [
-          el.resetPasswordModal,
-          el.accountModal,
-          el.soaModal,
-          el.tbvDecisionModal,
-          el.tbvModal,
-          el.paymentMethodModal,
-          el.partialPaymentModal,
-          el.invoiceSelectionModal,
-          el.paymentTypeModal,
-          el.paymentViewModal,
-          el.invoiceViewModal,
-          el.invoiceModal,
-          el.customerModal,
-          el.changePasswordModal
-        ].forEach((modal) => {
-          if (modal && modal.style.display === "flex") {
-            closeModal(modal);
-          }
-        });
-      });
+  [
+    el.resetPasswordModal,
+    el.accountModal,
+    el.soaModal,
+    el.tbvDecisionModal,
+    el.tbvModal,
+    el.paymentMethodModal,
+    el.partialPaymentModal,
+    el.invoiceSelectionModal,
+    el.paymentTypeModal,
+    el.paymentViewModal,
+    el.invoiceViewModal,
+    el.invoiceModal,
+    el.customerModal,
+    el.changePasswordModal
+  ].forEach((modal) => {
+    if (!modal || modal.style.display !== "flex") return;
+    if (!canCloseModal(modal)) return;
+    closeModal(modal);
+  });
+});
     }
 
     return { bindEvents };
