@@ -17,7 +17,41 @@
       formatDateTime
     } = deps || {};
 
-    let accountTableEventsBound = false;
+        let accountTableEventsBound = false;
+
+    const ACCOUNT_ADMIN_ACTION_ALIASES = Object.freeze({
+      listAccounts: ["list_accounts", "listaccounts"],
+      createAccount: ["create_account", "createaccount"],
+      updateAccount: ["update_account", "updateaccount"],
+      resetPassword: ["reset_password", "resetpassword"],
+      deleteAccount: ["delete_account", "deleteaccount"]
+    });
+
+    function toSnakeCase(value) {
+      return String(value || "")
+        .trim()
+        .replace(/([a-z0-9])([A-Z])/g, "$1_$2")
+        .replace(/[\s-]+/g, "_")
+        .toLowerCase();
+    }
+
+    function getAccountAdminActionCandidates(action) {
+      const normalizedAction = String(action || "").trim();
+      if (!normalizedAction) return [];
+
+      const candidates = [
+        normalizedAction,
+        ...(ACCOUNT_ADMIN_ACTION_ALIASES[normalizedAction] || []),
+        toSnakeCase(normalizedAction)
+      ];
+
+      return [...new Set(candidates.filter(Boolean))];
+    }
+
+    function isUnsupportedAccountAdminAction(body, response) {
+      const message = String(body?.error || body?.message || "").toLowerCase();
+      return response?.status === 400 && message.includes("unsupported action");
+    }
 
     function ensureAccountsAccess() {
       if (typeof canManageAccounts !== "function" || !canManageAccounts()) {
@@ -464,15 +498,15 @@
       }
     }
 
-        async function callAccountAdmin(action, payload = {}) {
+            async function callAccountAdmin(action, payload = {}) {
       ensureAccountsAccess();
 
       if (!ACCOUNT_ADMIN_FUNCTION_URL) {
         throw new Error("Account admin endpoint is not configured.");
       }
 
-      const normalizedAction = String(action || "").trim();
-      if (!normalizedAction) {
+      const requestedAction = String(action || "").trim();
+      if (!requestedAction) {
         throw new Error("Account admin action is required.");
       }
 
@@ -487,38 +521,62 @@
         throw new Error("Your login session has expired. Please sign in again.");
       }
 
-      const endpointUrl = new URL(ACCOUNT_ADMIN_FUNCTION_URL);
-      endpointUrl.searchParams.set("action", normalizedAction);
+      const actionCandidates = getAccountAdminActionCandidates(requestedAction);
+      let lastFailure = null;
 
-      const requestPayload =
-        payload && typeof payload === "object" && !Array.isArray(payload)
-          ? { action: normalizedAction, ...payload }
-          : { action: normalizedAction };
+      for (const candidateAction of actionCandidates) {
+        const endpointUrl = new URL(ACCOUNT_ADMIN_FUNCTION_URL);
+        endpointUrl.searchParams.set("action", candidateAction);
 
-      const response = await fetch(endpointUrl.toString(), {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${accessToken}`
-        },
-        body: JSON.stringify(requestPayload)
-      });
+        const requestPayload =
+          payload && typeof payload === "object" && !Array.isArray(payload)
+            ? { action: candidateAction, ...payload }
+            : { action: candidateAction };
 
-      let body = null;
-      try {
-        body = await response.json();
-      } catch (_error) {
-        body = null;
-      }
+        const response = await fetch(endpointUrl.toString(), {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${accessToken}`
+          },
+          body: JSON.stringify(requestPayload)
+        });
 
-      if (!response.ok) {
+        let body = null;
+        try {
+          body = await response.json();
+        } catch (_error) {
+          body = null;
+        }
+
+        if (response.ok) {
+          if (body?.error) {
+            throw new Error(body.error);
+          }
+
+          return body;
+        }
+
         const message =
           body?.error ||
           body?.message ||
           `Account admin request failed (${response.status}).`;
 
+        lastFailure = {
+          action: candidateAction,
+          message,
+          endpoint: endpointUrl.toString(),
+          responseStatus: response.status,
+          body
+        };
+
+        if (isUnsupportedAccountAdminAction(body, response)) {
+          continue;
+        }
+
         console.error("[AKY] Account admin request failed.", {
-          action: normalizedAction,
+          requestedAction,
+          attemptedAction: candidateAction,
           payload,
           endpoint: endpointUrl.toString(),
           responseStatus: response.status,
@@ -528,11 +586,17 @@
         throw new Error(message);
       }
 
-      if (body?.error) {
-        throw new Error(body.error);
-      }
+      console.error("[AKY] Account admin request failed.", {
+        requestedAction,
+        attemptedActions: actionCandidates,
+        payload,
+        lastFailure
+      });
 
-      return body;
+      throw new Error(
+        lastFailure?.message ||
+          `Unsupported account admin action: ${requestedAction}`
+      );
     }
 
     return {
