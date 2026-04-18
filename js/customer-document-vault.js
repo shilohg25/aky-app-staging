@@ -507,27 +507,23 @@
       if (!confirmed) return;
 
       try {
-        const { error: rowDeleteError } = await supabaseClient
-          .from("customer_documents")
-          .delete()
-          .eq("id", doc.id);
+        const { data, error } = await supabaseClient.functions.invoke("customer-document-write", {
+  body: {
+    action: "delete_customer_document",
+    document_id: doc.id
+  }
+});
 
-        if (rowDeleteError) {
-          throw new Error(rowDeleteError.message || "Could not delete document record.");
-        }
+if (error) {
+  throw new Error(error.message || "Could not delete document.");
+}
 
-        const { error: storageDeleteError } = await supabaseClient.storage
-          .from("customer-documents")
-          .remove([doc.storage_path]);
+if (!data?.ok) {
+  throw new Error(data?.error || "Could not delete document.");
+}
 
-        await loadCustomerDocuments();
-
-        if (storageDeleteError) {
-          setDocumentVaultStatus("Document record deleted, but file cleanup in storage failed.", true);
-          return;
-        }
-
-        setDocumentVaultStatus("Document deleted successfully.", false);
+await loadCustomerDocuments();
+setDocumentVaultStatus("Document deleted successfully.", false);
       } catch (error) {
         setDocumentVaultStatus(error.message || "Could not delete document.", true);
       }
