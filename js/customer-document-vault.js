@@ -2,11 +2,12 @@
   "use strict";
 
   function initCustomerDocumentVault(deps) {
-    const {
+        const {
       supabaseClient,
       canUploadCustomerDocuments,
       canDeleteCustomerDocuments,
       getSelectedCustomer,
+      getCurrentUser,
       escapeHtml
     } = deps || {};
 
@@ -376,7 +377,7 @@ async function createCustomerDocumentViaServer(payload) {
         }
         if (clearBtn) clearBtn.disabled = true;
 
-        await createCustomerDocumentViaServer({
+                await createCustomerDocumentViaServer({
   action: "create_customer_document",
   customer_id: customer.id,
   category,
@@ -384,6 +385,8 @@ async function createCustomerDocumentViaServer(payload) {
   reference_code: referenceCode,
   notes,
   source: documentVaultState.source,
+  uploaded_by: getCurrentUser?.()?.id || null,
+  origin_screen: "customer_vault",
   file_name: documentVaultState.file.name,
   mime_type: documentVaultState.file.type || "image/png",
   file_size: documentVaultState.file.size,
