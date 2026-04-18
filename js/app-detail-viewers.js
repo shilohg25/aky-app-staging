@@ -25,7 +25,6 @@
       escapeHtml
     } = deps || {};
 
-    void supabaseClient;
     void getSelectedCustomer;
 
     function getInvoiceById(invoiceId) {
@@ -61,6 +60,120 @@
         .sort((left, right) =>
           String(right.payment_date || "").localeCompare(String(left.payment_date || ""))
         );
+    }
+
+    async function fetchLinkedDocuments(filters) {
+      if (!supabaseClient) {
+        throw new Error("Supabase client is unavailable.");
+      }
+
+      let query = supabaseClient
+        .from("customer_documents")
+        .select("*")
+        .order("uploaded_at", { ascending: false });
+
+      if (filters?.invoiceId) {
+        query = query.eq("invoice_id", filters.invoiceId);
+      }
+
+      if (filters?.paymentId) {
+        query = query.eq("payment_id", filters.paymentId);
+      }
+
+      const { data, error } = await query;
+
+      if (error) {
+        throw new Error(error.message || "Could not load linked documents.");
+      }
+
+      return Array.isArray(data) ? data : [];
+    }
+
+    function getDocumentSourceLabel(doc) {
+      return doc?.source === "paste" ? "Paste" : "Upload";
+    }
+
+    function getDocumentTitle(doc) {
+      return doc?.title || doc?.file_name || "Untitled document";
+    }
+
+    function renderLinkedDocumentsTable(documents, emptyMessage) {
+      if (!documents.length) {
+        return `<div class="info-box mt-12">${escapeHtml(emptyMessage)}</div>`;
+      }
+
+      return `
+        <div class="table-wrap mt-12">
+          <table class="records-table">
+            <thead>
+              <tr>
+                <th>Uploaded</th>
+                <th>Category</th>
+                <th>Title</th>
+                <th>Reference</th>
+                <th>Source</th>
+                <th>Action</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${documents.map((doc) => `
+                <tr>
+                  <td>${escapeHtml(doc.uploaded_at ? formatDateOrDateTime(doc.uploaded_at) : "-")}</td>
+                  <td>${escapeHtml(doc.category || "-")}</td>
+                  <td>${escapeHtml(getDocumentTitle(doc))}</td>
+                  <td>${escapeHtml(doc.reference_code || "-")}</td>
+                  <td>${escapeHtml(getDocumentSourceLabel(doc))}</td>
+                  <td>
+                    <button
+                      class="btn btn-light small-btn"
+                      type="button"
+                      data-linked-doc-id="${escapeHtml(String(doc.id || ""))}"
+                    >
+                      Open
+                    </button>
+                  </td>
+                </tr>
+              `).join("")}
+            </tbody>
+          </table>
+        </div>
+      `;
+    }
+
+    async function openLinkedDocument(docId, documents) {
+      const doc = (documents || []).find((item) => String(item.id) === String(docId));
+      if (!doc || !doc.storage_path) {
+        alert("Could not open document.");
+        return;
+      }
+
+      try {
+        const { data, error } = await supabaseClient.storage
+          .from("customer-documents")
+          .download(doc.storage_path);
+
+        if (error || !data) {
+          throw new Error(error?.message || "Could not open document.");
+        }
+
+        const blobUrl = URL.createObjectURL(data);
+        window.open(blobUrl, "_blank", "noopener,noreferrer");
+        setTimeout(() => URL.revokeObjectURL(blobUrl), 60000);
+      } catch (error) {
+        alert(error.message || "Could not open document.");
+      }
+    }
+
+    function bindLinkedDocumentButtons(container, documents) {
+      if (!container) return;
+
+      container.querySelectorAll("[data-linked-doc-id]").forEach((button) => {
+        button.addEventListener("click", async () => {
+          const docId = button.getAttribute("data-linked-doc-id");
+          if (!docId) return;
+          await openLinkedDocument(docId, documents);
+        });
+      });
     }
 
     function renderInvoiceItemsTable(invoice) {
@@ -173,7 +286,7 @@
       }
     }
 
-    function viewInvoice(invoiceId) {
+    async function viewInvoice(invoiceId) {
       const invoice = getInvoiceById(invoiceId);
       if (!invoice || !el.invoiceViewContent || !el.invoiceViewModal) return;
 
@@ -185,6 +298,19 @@
       const discountAmount = Number(invoice.discount_total_amount || 0);
       const createdAt = formatDateOrDateTime(invoice.created_at);
       const updatedAt = formatDateOrDateTime(invoice.updated_at);
+
+      let linkedDocuments = [];
+      let linkedDocumentsHtml = '<div class="info-box mt-12">No uploaded documents are linked to this invoice.</div>';
+
+      try {
+        linkedDocuments = await fetchLinkedDocuments({ invoiceId: invoice.id });
+        linkedDocumentsHtml = renderLinkedDocumentsTable(
+          linkedDocuments,
+          "No uploaded documents are linked to this invoice."
+        );
+      } catch (error) {
+        linkedDocumentsHtml = `<div class="info-box mt-12">${escapeHtml(error.message || "Could not load linked documents.")}</div>`;
+      }
 
       el.invoiceViewContent.innerHTML = `
         <div class="invoice-meta-grid">
@@ -206,6 +332,13 @@
 
         <div class="panel soft-panel mt-12">
           <div class="panel-row">
+            <h4 class="panel-title small-title">Uploaded Documents</h4>
+          </div>
+          ${linkedDocumentsHtml}
+        </div>
+
+        <div class="panel soft-panel mt-12">
+          <div class="panel-row">
             <h4 class="panel-title small-title">Line Items</h4>
             <div class="btn-row">
               ${canEdit ? '<button id="invoiceViewEditBtn" type="button" class="btn btn-light">Edit Invoice</button>' : ""}
@@ -224,6 +357,7 @@
       `;
 
       bindInvoiceActionButtons(invoice);
+      bindLinkedDocumentButtons(el.invoiceViewContent, linkedDocuments);
       openModal(el.invoiceViewModal);
     }
 
@@ -308,7 +442,7 @@
       `;
     }
 
-    function viewPayment(paymentId) {
+    async function viewPayment(paymentId) {
       const payment = getPaymentById(paymentId);
       if (!payment || !el.paymentViewContent || !el.paymentViewModal) return;
 
@@ -318,6 +452,19 @@
       const statusText = payment.method === "Cheque"
         ? getChequeStatus(payment)
         : (payment.cleared === false ? "Uncleared" : "Collected");
+
+      let linkedDocuments = [];
+      let linkedDocumentsHtml = '<div class="info-box mt-12">No uploaded documents are linked to this payment.</div>';
+
+      try {
+        linkedDocuments = await fetchLinkedDocuments({ paymentId: payment.id });
+        linkedDocumentsHtml = renderLinkedDocumentsTable(
+          linkedDocuments,
+          "No uploaded documents are linked to this payment."
+        );
+      } catch (error) {
+        linkedDocumentsHtml = `<div class="info-box mt-12">${escapeHtml(error.message || "Could not load linked documents.")}</div>`;
+      }
 
       el.paymentViewContent.innerHTML = `
         <div class="invoice-meta-grid">
@@ -330,6 +477,13 @@
           <div class="invoice-meta-card"><span>Created By</span><strong>${escapeHtml(payment.created_by_name || "-")}</strong></div>
           <div class="invoice-meta-card"><span>Created</span><strong>${escapeHtml(createdAt)}</strong></div>
           <div class="invoice-meta-card"><span>Updated</span><strong>${escapeHtml(updatedAt)}</strong></div>
+        </div>
+
+        <div class="panel soft-panel mt-12">
+          <div class="panel-row">
+            <h4 class="panel-title small-title">Uploaded Documents</h4>
+          </div>
+          ${linkedDocumentsHtml}
         </div>
 
         <div class="panel soft-panel mt-12">
@@ -349,6 +503,7 @@
         </div>
       `;
 
+      bindLinkedDocumentButtons(el.paymentViewContent, linkedDocuments);
       openModal(el.paymentViewModal);
     }
 
