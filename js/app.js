@@ -2740,136 +2740,49 @@ el.execOutstanding.textContent = formatCompactPeso(
     return body;
   }
         async function markChequeCleared(paymentId) {
-    if (!ensureChequeActionAllowed(canClearCheque, "You do not have permission to clear cheques.")) return;
+  if (!ensureChequeActionAllowed(canClearCheque, "You do not have permission to clear cheques.")) return;
 
-    const payment = state.payments.find((p) => p.id === paymentId);
-    if (!payment) return alert("Cheque payment not found.");
+  const payment = state.payments.find((p) => p.id === paymentId);
+  if (!payment) return alert("Cheque payment not found.");
 
-    const status = getChequeStatus(payment);
-    if (status !== "Pending") return alert("Only pending cheques can be cleared.");
+  const status = getChequeStatus(payment);
+  if (status !== "Pending") return alert("Only pending cheques can be cleared.");
 
-    const confirmed = window.confirm("Mark this cheque as cleared?");
-    if (!confirmed) return;
+  const confirmed = window.confirm("Mark this cheque as cleared?");
+  if (!confirmed) return;
 
-    for (const alloc of payment.allocations || []) {
-      const invoice = state.invoices.find((inv) => inv.id === alloc.invoice_id);
-      if (!invoice) continue;
+  const { data, error } = await supabaseClient.rpc("clear_cheque_payment", {
+    p_payment_id: paymentId
+  });
 
-      const invoiceTotal = Number(invoice.total || invoice.total_amount || 0);
-      const currentPaid = Number(invoice.paidAmount || invoice.paid_amount || 0);
-      const allocAmount = getAllocationAmount(alloc);
+  if (error) return alert(error.message);
 
-      if (round2(currentPaid + allocAmount) > round2(invoiceTotal)) {
-        return alert(
-          `Cannot clear this cheque because invoice ${invoice.invoice_number || ""} would exceed its total. ` +
-          `This cheque may have been recorded under the old logic and needs owner review first.`
-        );
-      }
-    }
-
-    for (const alloc of payment.allocations || []) {
-      const invoice = state.invoices.find((inv) => inv.id === alloc.invoice_id);
-      if (!invoice) continue;
-
-      const invoiceTotal = Number(invoice.total || invoice.total_amount || 0);
-      const currentPaid = Number(invoice.paidAmount || invoice.paid_amount || 0);
-      const allocAmount = getAllocationAmount(alloc);
-
-      const newPaid = round2(currentPaid + allocAmount);
-      const newBalance = round2(Math.max(0, invoiceTotal - newPaid));
-      const newStatus = newBalance <= 0 ? "PAID" : newBalance < invoiceTotal ? "PARTIALLY_PAID" : "UNPAID";
-
-      const { error: invoiceError } = await supabaseClient
-        .from("invoices")
-        .update({
-          paid_amount: newPaid,
-          balance_amount: newBalance,
-          primary_status: newStatus
-        })
-        .eq("id", alloc.invoice_id);
-
-      if (invoiceError) return alert(invoiceError.message);
-    }
-
-    const updatedDetails = {
-      ...(payment.details || {}),
-      clearedAt: new Date().toISOString(),
-      clearedBy: state.currentProfile?.id || null,
-      clearedByName: state.currentProfile?.username || state.currentProfile?.email || "User",
-      bouncedAt: null,
-      bouncedBy: null,
-      bouncedByName: null,
-      bounceReason: null
-    };
-
-    const { error: paymentError } = await supabaseClient
-      .from("payments")
-      .update({
-        cleared: true,
-        details: updatedDetails
-      })
-      .eq("id", paymentId);
-
-    if (paymentError) return alert(paymentError.message);
-
-    await addLog(
-      "Clear",
-      "Cheque Payment",
-      `${payment.payment_type} - Cheque - ${formatPeso(payment.amount)}`,
-      "Cheque marked as cleared",
-      payment,
-      { payment_id: paymentId, status: "CLEARED" }
-    );
-
-        await refreshWorkflowViewsOnly(payment.customer_id || null);
-    alert("Cheque marked as cleared.");
-  }
+  await refreshWorkflowViewsOnly(payment.customer_id || data?.customer_id || null);
+  alert("Cheque marked as cleared.");
+}
 
     async function markChequeBounced(paymentId) {
-    if (!ensureChequeActionAllowed(canBounceCheque, "You do not have permission to bounce cheques.")) return;
+  if (!ensureChequeActionAllowed(canBounceCheque, "You do not have permission to bounce cheques.")) return;
 
-    const payment = state.payments.find((p) => p.id === paymentId);
-    if (!payment) return alert("Cheque payment not found.");
+  const payment = state.payments.find((p) => p.id === paymentId);
+  if (!payment) return alert("Cheque payment not found.");
 
-    const status = getChequeStatus(payment);
-    if (status !== "Pending") return alert("Only pending cheques can be marked as bounced.");
+  const status = getChequeStatus(payment);
+  if (status !== "Pending") return alert("Only pending cheques can be marked as bounced.");
 
-    const reason = window.prompt("Enter bounce reason:", "Insufficient funds");
-    if (reason === null) return;
+  const reason = window.prompt("Enter bounce reason:", "Insufficient funds");
+  if (reason === null) return;
 
-    const updatedDetails = {
-      ...(payment.details || {}),
-      bouncedAt: new Date().toISOString(),
-      bouncedBy: state.currentProfile?.id || null,
-      bouncedByName: state.currentProfile?.username || state.currentProfile?.email || "User",
-      bounceReason: reason.trim() || "No reason provided",
-      clearedAt: null,
-      clearedBy: null,
-      clearedByName: null
-    };
+  const { data, error } = await supabaseClient.rpc("bounce_cheque_payment", {
+    p_payment_id: paymentId,
+    p_reason: reason.trim() || "No reason provided"
+  });
 
-    const { error } = await supabaseClient
-      .from("payments")
-      .update({
-        cleared: false,
-        details: updatedDetails
-      })
-      .eq("id", paymentId);
+  if (error) return alert(error.message);
 
-    if (error) return alert(error.message);
-
-    await addLog(
-      "Bounce",
-      "Cheque Payment",
-      `${payment.payment_type} - Cheque - ${formatPeso(payment.amount)}`,
-      updatedDetails.bounceReason,
-      payment,
-      { payment_id: paymentId, status: "BOUNCED" }
-    );
-
-        await refreshWorkflowViewsOnly(payment.customer_id || null);
-    alert("Cheque marked as bounced.");
-  }
+  await refreshWorkflowViewsOnly(payment.customer_id || data?.customer_id || null);
+  alert("Cheque marked as bounced.");
+}
   function getPaymentDetailsObject(payment) {
     const raw = payment?.details;
 
@@ -3333,29 +3246,30 @@ el.execOutstanding.textContent = formatCompactPeso(
   }
 
   async function decideTbv(decision) {
-    if (!canApproveTbv()) return;
-    const tbvId = state.selectedTbvForDecision;
-    if (!tbvId) return;
-    const tbv = state.tbvs.find((t) => t.id === tbvId);
-    if (!tbv) return;
-    const notes = el.tbvDecisionNotesInput.value.trim();
-    const user = getCurrentUser();
-    const { error: tbvError } = await supabaseClient.from("invoice_void_requests").update({ status: decision, decision_notes: notes || null, decided_by: user.id, decided_by_name: user.username, decided_at: new Date().toISOString() }).eq("id", tbvId);
-    if (tbvError) return alert(tbvError.message);
-    const invoice = state.invoices.find((i) => i.id === tbv.invoice_id);
-    if (decision === "APPROVED" && invoice) {
-      const { error: invoiceError } = await supabaseClient.from("invoices").update({ is_voided: true, voided_at: new Date().toISOString(), voided_by: user.id }).eq("id", tbv.invoice_id);
-      if (invoiceError) return alert(invoiceError.message);
-      await addLog("Approve", "TBV Request", invoice.invoice_number, notes || tbv.explanation, tbv, { decision: "APPROVED" });
-      await addLog("Void", "Invoice", invoice.invoice_number, tbv.explanation, invoice, null);
-    } else if (invoice) {
-      await addLog("Deny", "TBV Request", invoice.invoice_number, notes || "", tbv, { decision: "DENIED" });
-    }
-    closeModal(el.tbvDecisionModal);
-    state.selectedTbvForDecision = null;
-        await refreshWorkflowViewsOnly(invoice?.customer_id || null);
-    alert(`TBV ${decision === "APPROVED" ? "approved" : "denied"} successfully.`);
-  }
+  if (!canApproveTbv()) return;
+
+  const tbvId = state.selectedTbvForDecision;
+  if (!tbvId) return;
+
+  const tbv = state.tbvs.find((t) => t.id === tbvId);
+  if (!tbv) return;
+
+  const invoice = state.invoices.find((i) => i.id === tbv.invoice_id);
+  const notes = el.tbvDecisionNotesInput.value.trim();
+
+  const { data, error } = await supabaseClient.rpc("decide_tbv", {
+    p_tbv_id: tbvId,
+    p_decision: decision,
+    p_notes: notes || null
+  });
+
+  if (error) return alert(error.message);
+
+  closeModal(el.tbvDecisionModal);
+  state.selectedTbvForDecision = null;
+  await refreshWorkflowViewsOnly(invoice?.customer_id || data?.customer_id || null);
+  alert(`TBV ${decision === "APPROVED" ? "approved" : "denied"} successfully.`);
+}
 function autofillSoaPaymentRange() {
   const asOfDate = el.soaAsOfDate.value;
   if (!asOfDate) return;
