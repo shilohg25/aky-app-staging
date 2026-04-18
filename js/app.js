@@ -1754,19 +1754,34 @@ function invoiceDocumentSafeFileName(fileName) {
   return AKY_DOCUMENT_UTILS.safeStorageFileName(fileName, "invoice-document.png");
 }
 async function createCustomerDocumentViaServer(payload) {
-  const { data, error } = await supabaseClient.functions.invoke("customer-document-write", {
-    body: payload
-  });
+  const fallbackWrite = window.AKY_DOCUMENT_UTILS?.writeCustomerDocumentDirect;
 
-  if (error) {
-    throw new Error(error.message || "Customer document write failed.");
+  try {
+    const { data, error } = await supabaseClient.functions.invoke("customer-document-write", {
+      body: payload
+    });
+
+    if (error) {
+      throw error;
+    }
+
+    if (!data?.ok) {
+      throw new Error(data?.error || "Customer document write failed.");
+    }
+
+    return data;
+  } catch (error) {
+    console.warn("[AKY] customer-document-write failed. Falling back to direct document write.", error);
+
+    if (typeof fallbackWrite !== "function") {
+      throw new Error(error?.message || "Customer document write failed.");
+    }
+
+    return fallbackWrite({
+      supabaseClient,
+      payload
+    });
   }
-
-  if (!data?.ok) {
-    throw new Error(data?.error || "Customer document write failed.");
-  }
-
-  return data;
 }
 async function saveInvoiceDocumentToVault({ customerId, invoiceId, invoiceNumber, notes }) {
   if (!invoiceDocumentState.file) return false;
@@ -3475,18 +3490,42 @@ function renderLogSortIndicators() {
   });
 }
   
-  async function addLog(action, entity, details, explanation, oldData, newData) {
-  const { error } = await supabaseClient.rpc("append_activity_log", {
-    p_action: action,
-    p_entity: entity,
-    p_details: details || "",
-    p_explanation: explanation || "",
-    p_old_data: oldData || null,
-    p_new_data: newData || null
-  });
+    async function addLog(action, entity, details, explanation, oldData, newData) {
+  try {
+    const { error } = await supabaseClient.rpc("append_activity_log", {
+      p_action: action,
+      p_entity: entity,
+      p_details: details || "",
+      p_explanation: explanation || "",
+      p_old_data: oldData || null,
+      p_new_data: newData || null
+    });
 
-  if (error) {
-    console.error("[AKY] append_activity_log failed.", error);
+    if (!error) {
+      return;
+    }
+
+    throw error;
+  } catch (error) {
+    console.warn("[AKY] append_activity_log RPC failed. Falling back to direct insert.", error);
+
+    const profile = state.currentProfile || {};
+    const { error: insertError } = await supabaseClient
+      .from("activity_logs")
+      .insert({
+        username: profile.username || profile.email || "Unknown",
+        role: profile.role || "user",
+        action,
+        entity,
+        details: details || "",
+        explanation: explanation || "",
+        old_data: oldData || null,
+        new_data: newData || null
+      });
+
+    if (insertError) {
+      console.error("[AKY] activity_logs insert failed.", insertError);
+    }
   }
 }
 
