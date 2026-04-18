@@ -149,82 +149,81 @@
     }
 
     function bindReportTableEvents() {
-      if (reportTableEventsBound || !el.reportsTableBody) return;
+  if (reportTableEventsBound || !el.reportsTableBody) return;
 
-      el.reportsTableBody.addEventListener("click", (event) => {
-        const button = event.target.closest("button[data-report-invoice-id]");
-        if (!button) return;
+  el.reportsTableBody.addEventListener("click", (event) => {
+    const trigger = event.target.closest("[data-report-invoice-id]");
+    if (!trigger) return;
 
-        const customerId = button.dataset.reportCustomerId || "";
-        const invoiceId = button.dataset.reportInvoiceId || "";
-        if (!customerId || !invoiceId) return;
+    const customerId = trigger.dataset.reportCustomerId || "";
+    const invoiceId = trigger.dataset.reportInvoiceId || "";
+    if (!customerId || !invoiceId) return;
 
-        openReportInvoiceDetails(customerId, invoiceId);
-      });
+    openReportInvoiceDetails(customerId, invoiceId);
+  });
 
-      reportTableEventsBound = true;
-    }
+  reportTableEventsBound = true;
+}
 
     function renderReportsView() {
-      if (!el.reportsTableBody) return;
+  if (!el.reportsTableBody) return;
 
-      bindReportTableEvents();
-      const rows = getReportRows();
-      el.reportsTableBody.innerHTML = "";
+  bindReportTableEvents();
+  const rows = getReportRows();
+  el.reportsTableBody.innerHTML = "";
 
-      setText(el.reportInvoicesCount, String(rows.length));
-      setText(
-        el.reportTotalInvoiced,
-        formatPeso(rows.reduce((sum, row) => sum + Number(row.total || 0), 0))
-      );
-      setText(
-        el.reportTotalPaid,
-        formatPeso(rows.reduce((sum, row) => sum + Number(row.paid || 0), 0))
-      );
-      setText(
-        el.reportTotalOutstanding,
-        formatPeso(rows.reduce((sum, row) => sum + Number(row.balance || 0), 0))
-      );
+  setText(el.reportInvoicesCount, String(rows.length));
+  setText(
+    el.reportTotalInvoiced,
+    formatPeso(rows.reduce((sum, row) => sum + Number(row.total || 0), 0))
+  );
+  setText(
+    el.reportTotalPaid,
+    formatPeso(rows.reduce((sum, row) => sum + Number(row.paid || 0), 0))
+  );
+  setText(
+    el.reportTotalOutstanding,
+    formatPeso(rows.reduce((sum, row) => sum + Number(row.balance || 0), 0))
+  );
 
-      if (!rows.length) {
-        el.reportsTableBody.innerHTML = `
-          <tr>
-            <td colspan="11" class="muted">No invoices found for the selected filters.</td>
-          </tr>
-        `;
-        renderPaymentReceivedReportView();
-        return;
-      }
+  if (!rows.length) {
+    el.reportsTableBody.innerHTML = `
+      <tr>
+        <td colspan="11" class="muted">No invoices found for the selected filters.</td>
+      </tr>
+    `;
+    renderPaymentReceivedReportView();
+    return;
+  }
 
-      el.reportsTableBody.innerHTML = rows
-        .map((row) => `
-          <tr>
-            <td>${escapeHtml(row.customerName)}</td>
-            <td>${escapeHtml(row.invoiceNumber)}</td>
-            <td>${escapeHtml(row.invoiceDate || "-")}</td>
-            <td>${escapeHtml(row.poNumber)}</td>
-            <td>${escapeHtml(row.reference)}</td>
-            <td>${formatPeso(row.total)}</td>
-            <td>${formatPeso(row.paid)}</td>
-            <td>${formatPeso(row.balance)}</td>
-            <td>${row.statusHtml}</td>
-            <td>${escapeHtml(row.collectionReceipt)}</td>
-            <td>
-              <button
-                type="button"
-                class="btn btn-light"
-                data-report-customer-id="${escapeHtml(row.customerId)}"
-                data-report-invoice-id="${escapeHtml(row.invoiceId)}"
-              >
-                ${escapeHtml(row.latestPaidDateDisplay)}
-              </button>
-            </td>
-          </tr>
-        `)
-        .join("");
+  el.reportsTableBody.innerHTML = rows
+    .map((row) => `
+      <tr>
+        <td>${escapeHtml(row.customerName)}</td>
+        <td>
+          <span
+            class="clickable"
+            data-report-customer-id="${escapeHtml(row.customerId)}"
+            data-report-invoice-id="${escapeHtml(row.invoiceId)}"
+          >
+            ${escapeHtml(row.invoiceNumber)}
+          </span>
+        </td>
+        <td>${escapeHtml(row.invoiceDate || "-")}</td>
+        <td>${escapeHtml(row.poNumber)}</td>
+        <td>${escapeHtml(row.reference)}</td>
+        <td>${formatPeso(row.total)}</td>
+        <td>${formatPeso(row.paid)}</td>
+        <td>${formatPeso(row.balance)}</td>
+        <td>${row.statusHtml}</td>
+        <td>${escapeHtml(row.collectionReceipt)}</td>
+        <td>${escapeHtml(row.latestPaidDateDisplay)}</td>
+      </tr>
+    `)
+    .join("");
 
-      renderPaymentReceivedReportView();
-    }
+  renderPaymentReceivedReportView();
+}
 
     function clearReportFilters() {
       if (el.reportCustomerFilter) el.reportCustomerFilter.value = "";
@@ -327,95 +326,95 @@
     }
 
     function bindPaymentReportTableEvents() {
-      if (paymentReportTableEventsBound || !el.paymentReportsTableBody) return;
+  if (paymentReportTableEventsBound || !el.paymentReportsTableBody) return;
 
-      el.paymentReportsTableBody.addEventListener("click", (event) => {
-        const button = event.target.closest("button[data-report-payment-id]");
-        if (!button) return;
+  el.paymentReportsTableBody.addEventListener("click", (event) => {
+    const trigger = event.target.closest("[data-report-payment-id]");
+    if (!trigger) return;
 
-        const customerId = button.dataset.reportCustomerId || "";
-        const paymentId = button.dataset.reportPaymentId || "";
-        if (!customerId || !paymentId) return;
+    const customerId = trigger.dataset.reportCustomerId || "";
+    const paymentId = trigger.dataset.reportPaymentId || "";
+    if (!customerId || !paymentId) return;
 
-        openReportPaymentDetails(customerId, paymentId);
-      });
+    openReportPaymentDetails(customerId, paymentId);
+  });
 
-      paymentReportTableEventsBound = true;
-    }
+  paymentReportTableEventsBound = true;
+}
 
     function renderPaymentReceivedReportView() {
-      if (!el.paymentReportsTableBody) return;
+  if (!el.paymentReportsTableBody) return;
 
-      bindPaymentReportTableEvents();
-      const rows = getPaymentReportRows();
-      el.paymentReportsTableBody.innerHTML = "";
+  bindPaymentReportTableEvents();
+  const rows = getPaymentReportRows();
+  el.paymentReportsTableBody.innerHTML = "";
 
-      setText(el.paymentReportCount, String(rows.length));
-      setText(
-        el.paymentReportGrossTotal,
-        formatPeso(rows.reduce((sum, row) => sum + Number(row.grossAmount || 0), 0))
-      );
-      setText(
-        el.paymentReportClearedTotal,
-        formatPeso(
-          rows
-            .filter((row) => row.statusCode === "COLLECTED")
-            .reduce((sum, row) => sum + Number(row.grossAmount || 0), 0)
-        )
-      );
-      setText(
-        el.paymentReportPendingTotal,
-        formatPeso(
-          rows
-            .filter((row) => row.statusCode === "PENDING")
-            .reduce((sum, row) => sum + Number(row.grossAmount || 0), 0)
-        )
-      );
-      setText(
-        el.paymentReportBouncedTotal,
-        formatPeso(
-          rows
-            .filter((row) => row.statusCode === "BOUNCED")
-            .reduce((sum, row) => sum + Number(row.grossAmount || 0), 0)
-        )
-      );
+  setText(el.paymentReportCount, String(rows.length));
+  setText(
+    el.paymentReportGrossTotal,
+    formatPeso(rows.reduce((sum, row) => sum + Number(row.grossAmount || 0), 0))
+  );
+  setText(
+    el.paymentReportClearedTotal,
+    formatPeso(
+      rows
+        .filter((row) => row.statusCode === "COLLECTED")
+        .reduce((sum, row) => sum + Number(row.grossAmount || 0), 0)
+    )
+  );
+  setText(
+    el.paymentReportPendingTotal,
+    formatPeso(
+      rows
+        .filter((row) => row.statusCode === "PENDING")
+        .reduce((sum, row) => sum + Number(row.grossAmount || 0), 0)
+    )
+  );
+  setText(
+    el.paymentReportBouncedTotal,
+    formatPeso(
+      rows
+        .filter((row) => row.statusCode === "BOUNCED")
+        .reduce((sum, row) => sum + Number(row.grossAmount || 0), 0)
+    )
+  );
 
-      if (!rows.length) {
-        el.paymentReportsTableBody.innerHTML = `
-          <tr>
-            <td colspan="11" class="muted">No payments found for the selected filters.</td>
-          </tr>
-        `;
-        return;
-      }
+  if (!rows.length) {
+    el.paymentReportsTableBody.innerHTML = `
+      <tr>
+        <td colspan="11" class="muted">No payments found for the selected filters.</td>
+      </tr>
+    `;
+    return;
+  }
 
-      el.paymentReportsTableBody.innerHTML = rows
-        .map((row) => `
-          <tr>
-            <td>${escapeHtml(row.paymentDate || "-")}</td>
-            <td>${escapeHtml(row.customerName)}</td>
-            <td>${escapeHtml(row.type)}</td>
-            <td>${escapeHtml(row.method)}</td>
-            <td>${escapeHtml(row.reference)}</td>
-            <td>${formatPeso(row.grossAmount)}</td>
-            <td><span class="status-pill ${escapeHtml(row.statusClass)}">${escapeHtml(row.statusLabel)}</span></td>
-            <td>${escapeHtml(row.appliedTo)}</td>
-            <td>${escapeHtml(row.collectionReceipt)}</td>
-            <td>
-              <button
-                type="button"
-                class="btn btn-light"
-                data-report-customer-id="${escapeHtml(row.customerId)}"
-                data-report-payment-id="${escapeHtml(row.paymentId)}"
-              >
-                ${escapeHtml(row.resolvedDate)}
-              </button>
-            </td>
-            <td>${escapeHtml(row.notes)}</td>
-          </tr>
-        `)
-        .join("");
-    }
+  el.paymentReportsTableBody.innerHTML = rows
+    .map((row) => `
+      <tr>
+        <td>${escapeHtml(row.paymentDate || "-")}</td>
+        <td>${escapeHtml(row.customerName)}</td>
+        <td>${escapeHtml(row.type)}</td>
+        <td>${escapeHtml(row.method)}</td>
+        <td>${escapeHtml(row.reference)}</td>
+        <td>${formatPeso(row.grossAmount)}</td>
+        <td><span class="status-pill ${escapeHtml(row.statusClass)}">${escapeHtml(row.statusLabel)}</span></td>
+        <td>${escapeHtml(row.appliedTo)}</td>
+        <td>${escapeHtml(row.collectionReceipt)}</td>
+        <td>${escapeHtml(row.resolvedDate)}</td>
+        <td>
+          <div>${escapeHtml(row.notes)}</div>
+          <div
+            class="clickable"
+            data-report-customer-id="${escapeHtml(row.customerId)}"
+            data-report-payment-id="${escapeHtml(row.paymentId)}"
+          >
+            Details
+          </div>
+        </td>
+      </tr>
+    `)
+    .join("");
+}
 
     function clearPaymentReportFilters() {
       if (el.paymentReportCustomerFilter) el.paymentReportCustomerFilter.value = "";
