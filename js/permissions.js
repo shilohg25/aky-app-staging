@@ -1,3 +1,11 @@
+/**
+ * UX-only role capability map.
+ *
+ * IMPORTANT:
+ * - This file does not enforce security.
+ * - Server-side authorization, RLS, RPCs, and Edge Functions are authoritative.
+ * - These flags are only for visibility, affordances, and client-side guidance.
+ */
 window.ROLE_PERMISSIONS = {
   owner: {
     viewAllData: true,
