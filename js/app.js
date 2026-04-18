@@ -330,17 +330,19 @@
       return;
     }
 
-    if (view === "accounts" && canManageAccounts()) {
+        if (view === "accounts" && canManageAccounts()) {
       renderAccountsView();
+      if (!state.accounts.length) {
+        void refreshAccounts();
+      }
     }
   }
 
-  async function showApp() {
+    async function showApp() {
     el.loginScreen.classList.add("hidden");
     el.appShell.classList.remove("hidden");
     renderCurrentUser();
     await loadAllData();
-    if (canManageAccounts()) await loadAccounts();
 
     renderCustomerList();
     renderCurrentCustomerDashboard();
