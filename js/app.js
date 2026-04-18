@@ -3219,7 +3219,10 @@ el.execOutstanding.textContent = formatCompactPeso(
     if (existingPending) return alert("This invoice already has a pending TBV request.");
     const user = getCurrentUser();
     const invoice = state.invoices.find((x) => x.id === invoiceId);
-    const { error } = await supabaseClient.from("invoice_void_requests").insert([{ invoice_id: invoiceId, requested_by: user.id, requested_by_name: user.username, requested_by_role: user.role, explanation, status: "PENDING" }]);
+  const { error } = await supabaseClient.rpc("create_invoice_void_request", {
+  p_invoice_id: invoiceId,
+  p_explanation: explanation
+});
     if (error) return alert(error.message);
     await addLog("Create", "TBV Request", invoice?.invoice_number || "Invoice", explanation, null, { invoice_id: invoiceId, explanation });
     closeModal(el.tbvModal);
@@ -3522,18 +3525,19 @@ function renderLogSortIndicators() {
 }
   
   async function addLog(action, entity, details, explanation, oldData, newData) {
-    await supabaseClient.from("activity_logs").insert([{
-      user_id: state.currentProfile?.id || null,
-      username: state.currentProfile?.username || null,
-      role: state.currentProfile?.role || null,
-      action,
-      entity,
-      details: details || "",
-      explanation: explanation || "",
-      old_data: oldData || null,
-      new_data: newData || null
-    }]);
+  const { error } = await supabaseClient.rpc("append_activity_log", {
+    p_action: action,
+    p_entity: entity,
+    p_details: details || "",
+    p_explanation: explanation || "",
+    p_old_data: oldData || null,
+    p_new_data: newData || null
+  });
+
+  if (error) {
+    console.error("[AKY] append_activity_log failed.", error);
   }
+}
 
       async function refreshCustomerData(customerId) {
     if (!customerId) return;
