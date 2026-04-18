@@ -464,11 +464,16 @@
       }
     }
 
-    async function callAccountAdmin(action, payload) {
+        async function callAccountAdmin(action, payload = {}) {
       ensureAccountsAccess();
 
       if (!ACCOUNT_ADMIN_FUNCTION_URL) {
         throw new Error("Account admin endpoint is not configured.");
+      }
+
+      const normalizedAction = String(action || "").trim();
+      if (!normalizedAction) {
+        throw new Error("Account admin action is required.");
       }
 
       const { data: sessionData, error: sessionError } = await supabaseClient.auth.getSession();
@@ -482,13 +487,21 @@
         throw new Error("Your login session has expired. Please sign in again.");
       }
 
-      const response = await fetch(ACCOUNT_ADMIN_FUNCTION_URL, {
+      const endpointUrl = new URL(ACCOUNT_ADMIN_FUNCTION_URL);
+      endpointUrl.searchParams.set("action", normalizedAction);
+
+      const requestPayload =
+        payload && typeof payload === "object" && !Array.isArray(payload)
+          ? { action: normalizedAction, ...payload }
+          : { action: normalizedAction };
+
+      const response = await fetch(endpointUrl.toString(), {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
           Authorization: `Bearer ${accessToken}`
         },
-        body: JSON.stringify({ action, ...payload })
+        body: JSON.stringify(requestPayload)
       });
 
       let body = null;
@@ -505,8 +518,9 @@
           `Account admin request failed (${response.status}).`;
 
         console.error("[AKY] Account admin request failed.", {
-          action,
+          action: normalizedAction,
           payload,
+          endpoint: endpointUrl.toString(),
           responseStatus: response.status,
           body
         });
