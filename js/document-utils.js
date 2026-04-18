@@ -172,71 +172,85 @@
   }
 
   function buildCustomerDocumentInsertPayload(payload, storagePath) {
-    const action = String(payload?.action || "");
-    const customerId = payload?.customer_id || null;
-    const fileName = payload?.file_name || "document.png";
-    const mimeType = payload?.mime_type || "image/png";
-    const fileSize = Number(payload?.file_size || 0);
-    const source = payload?.source || "upload";
-    const notes = payload?.notes || null;
+  const action = String(payload?.action || "");
+  const customerId = payload?.customer_id || null;
+  const fileName = payload?.file_name || "document.png";
+  const mimeType = payload?.mime_type || "image/png";
+  const fileSize = Number(payload?.file_size || 0);
+  const source = payload?.source || "upload";
+  const notes = payload?.notes || null;
+  const uploadedBy = payload?.uploaded_by || null;
 
-    if (!customerId) {
-      throw new Error("Missing customer_id.");
-    }
-
-    if (!storagePath) {
-      throw new Error("Missing storage path.");
-    }
-
-    if (action === "create_invoice_document") {
-      return {
-        customer_id: customerId,
-        invoice_id: payload.invoice_id || null,
-        category: "invoice",
-        title: payload.invoice_number || fileName,
-        reference_code: payload.invoice_number || null,
-        notes,
-        source,
-        file_name: fileName,
-        mime_type: mimeType,
-        file_size: fileSize,
-        storage_path: storagePath
-      };
-    }
-
-    if (action === "create_payment_document") {
-      return {
-        customer_id: customerId,
-        payment_id: payload.payment_id || null,
-        category: "payment_proof",
-        title: payload.payment_title || fileName,
-        reference_code: payload.payment_reference_code || null,
-        notes,
-        source,
-        file_name: fileName,
-        mime_type: mimeType,
-        file_size: fileSize,
-        storage_path: storagePath
-      };
-    }
-
-    if (action === "create_customer_document") {
-      return {
-        customer_id: customerId,
-        category: payload.category || "other",
-        title: payload.title || fileName,
-        reference_code: payload.reference_code || null,
-        notes,
-        source,
-        file_name: fileName,
-        mime_type: mimeType,
-        file_size: fileSize,
-        storage_path: storagePath
-      };
-    }
-
-    throw new Error("Unsupported customer document action.");
+  if (!customerId) {
+    throw new Error("Missing customer_id.");
   }
+
+  if (!storagePath) {
+    throw new Error("Missing storage path.");
+  }
+
+  if (!uploadedBy) {
+    throw new Error("Missing uploaded_by.");
+  }
+
+  let originScreen = String(payload?.origin_screen || "").trim();
+  if (!originScreen) {
+    if (action === "create_invoice_document") {
+      originScreen = "invoice_modal";
+    } else if (action === "create_payment_document") {
+      originScreen = "payment_modal";
+    } else {
+      originScreen = "customer_vault";
+    }
+  }
+
+  if (!["customer_vault", "invoice_modal", "payment_modal"].includes(originScreen)) {
+    throw new Error("Invalid origin_screen.");
+  }
+
+  const basePayload = {
+    customer_id: customerId,
+    notes,
+    source,
+    file_name: fileName,
+    mime_type: mimeType,
+    file_size: fileSize,
+    storage_path: storagePath,
+    uploaded_by: uploadedBy,
+    origin_screen: originScreen
+  };
+
+  if (action === "create_invoice_document") {
+    return {
+      ...basePayload,
+      invoice_id: payload.invoice_id || null,
+      category: "invoice",
+      title: payload.invoice_number || fileName,
+      reference_code: payload.invoice_number || null
+    };
+  }
+
+  if (action === "create_payment_document") {
+    return {
+      ...basePayload,
+      payment_id: payload.payment_id || null,
+      category: "payment_proof",
+      title: payload.payment_title || fileName,
+      reference_code: payload.payment_reference_code || null
+    };
+  }
+
+  if (action === "create_customer_document") {
+    return {
+      ...basePayload,
+      category: payload.category || "other",
+      title: payload.title || fileName,
+      reference_code: payload.reference_code || null
+    };
+  }
+
+  throw new Error("Unsupported customer document action.");
+}
 
   async function writeCustomerDocumentDirect(options) {
     const {
