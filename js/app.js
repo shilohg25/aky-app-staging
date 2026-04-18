@@ -1,9 +1,62 @@
 (function () {
   "use strict";
-const { supabaseClient, ACCOUNT_ADMIN_FUNCTION_URL, ROLE_PERMISSIONS, state, AKY_DOCUMENT_UTILS, AKY_DOM_ELEMENTS, AKY_AI_DOCUMENT_ASSIST, AKY_CUSTOMER_DOCUMENT_VAULT } = window;
-  
+  const { supabaseClient, ACCOUNT_ADMIN_FUNCTION_URL, ROLE_PERMISSIONS, state, AKY_DOCUMENT_UTILS, AKY_DOM_ELEMENTS, AKY_AI_DOCUMENT_ASSIST, AKY_CUSTOMER_DOCUMENT_VAULT } = window;
+
   const el = AKY_DOM_ELEMENTS.mapElements();
-    const {
+
+  function createNoopModuleFunction(moduleName, functionName) {
+    return function missingModuleFunction() {
+      console.error(`[AKY] ${moduleName}.${functionName} is unavailable in this build.`);
+      return undefined;
+    };
+  }
+
+  function initOptionalModule(moduleName, initFn, depsFactory, functionNames) {
+    const fallback = {};
+
+    for (const functionName of functionNames) {
+      fallback[functionName] = createNoopModuleFunction(moduleName, functionName);
+    }
+
+    if (typeof initFn !== "function") {
+      console.error(`[AKY] ${moduleName}.init is missing.`);
+      return fallback;
+    }
+
+    try {
+      const result = initFn(depsFactory()) || {};
+      return Object.fromEntries(
+        functionNames.map((functionName) => [
+          functionName,
+          typeof result[functionName] === "function" ? result[functionName] : fallback[functionName]
+        ])
+      );
+    } catch (error) {
+      console.error(`[AKY] ${moduleName}.init failed.`, error);
+      return fallback;
+    }
+  }
+
+  function bindCoreEvents() {
+    const submitLogin = (event) => {
+      if (event.key !== "Enter") return;
+      event.preventDefault();
+      login();
+    };
+
+    el.loginBtn?.addEventListener("click", login);
+    el.loginUsername?.addEventListener("keydown", submitLogin);
+    el.loginPassword?.addEventListener("keydown", submitLogin);
+    el.logoutBtn?.addEventListener("click", logout);
+    el.openChangePasswordBtn?.addEventListener("click", () => openChangePasswordModal(false));
+    el.saveOwnPasswordBtn?.addEventListener("click", () => runWithBusyState(el.saveOwnPasswordBtn, saveOwnPassword));
+    el.closeChangePasswordModalBtn?.addEventListener("click", () => {
+      if (el.changePasswordModal?.dataset.force === "1") return;
+      closeModal(el.changePasswordModal);
+    });
+  }
+
+  const {
     populateReportCustomerFilter,
     getReportRows,
     renderReportsView,
@@ -16,31 +69,50 @@ const { supabaseClient, ACCOUNT_ADMIN_FUNCTION_URL, ROLE_PERMISSIONS, state, AKY
     printTbvReport,
     downloadReportCsv,
     printReport
-  } = window.AKY_APP_REPORTS.initAppReports({
-    state,
-    el,
-    buildCustomerFilterOptionsHtml,
-    getActiveInvoices,
-    isOperationallyCollectedPayment,
-    getPaymentCollectionReceipt,
-    statusPill,
-    openReportInvoiceDetails,
-    openReportPaymentDetails,
-    getChequeStatus,
-    formatDateTime,
-    getPaymentDetailsObject,
-    getInvoiceReferenceLabel,
-    getAllocationAmount,
-    getPaymentTypeLabel,
-    formatPeso,
-    csvSafe,
-    downloadTextFile,
-    todayStr,
-    openPrintWindow,
-    getFilteredTbvRows,
-    escapeHtml
-  });
-    const {
+  } = initOptionalModule(
+    "AKY_APP_REPORTS",
+    window.AKY_APP_REPORTS?.initAppReports,
+    () => ({
+      state,
+      el,
+      buildCustomerFilterOptionsHtml,
+      getActiveInvoices,
+      isOperationallyCollectedPayment,
+      getPaymentCollectionReceipt,
+      statusPill,
+      openReportInvoiceDetails,
+      openReportPaymentDetails,
+      getChequeStatus,
+      formatDateTime,
+      getPaymentDetailsObject,
+      getInvoiceReferenceLabel,
+      getAllocationAmount,
+      getPaymentTypeLabel,
+      formatPeso,
+      csvSafe,
+      downloadTextFile,
+      todayStr,
+      openPrintWindow,
+      getFilteredTbvRows,
+      escapeHtml
+    }),
+    [
+      "populateReportCustomerFilter",
+      "getReportRows",
+      "renderReportsView",
+      "clearReportFilters",
+      "renderPaymentReceivedReportView",
+      "clearPaymentReportFilters",
+      "downloadPaymentReportCsv",
+      "printPaymentReceivedReport",
+      "downloadTbvReportCsv",
+      "printTbvReport",
+      "downloadReportCsv",
+      "printReport"
+    ]
+  );
+
+  const {
     refreshAccounts,
     loadAccounts,
     getFilteredAccounts,
@@ -52,105 +124,142 @@ const { supabaseClient, ACCOUNT_ADMIN_FUNCTION_URL, ROLE_PERMISSIONS, state, AKY
     saveResetPassword,
     deleteAccount,
     callAccountAdmin
-  } = window.AKY_APP_ACCOUNTS.initAppAccounts({
-    supabaseClient,
-    ACCOUNT_ADMIN_FUNCTION_URL,
-    state,
-    el,
-    canManageAccounts,
-    validatePassword,
-    addLog,
-    closeModal,
-    openModal,
-    escapeHtml,
-    capitalizeRole,
-    formatDateTime
-  });
-    const {
+  } = initOptionalModule(
+    "AKY_APP_ACCOUNTS",
+    window.AKY_APP_ACCOUNTS?.initAppAccounts,
+    () => ({
+      supabaseClient,
+      ACCOUNT_ADMIN_FUNCTION_URL,
+      state,
+      el,
+      canManageAccounts,
+      validatePassword,
+      addLog,
+      closeModal,
+      openModal,
+      escapeHtml,
+      capitalizeRole,
+      formatDateTime
+    }),
+    [
+      "refreshAccounts",
+      "loadAccounts",
+      "getFilteredAccounts",
+      "renderAccountsView",
+      "openCreateAccountModal",
+      "openEditAccountModal",
+      "saveAccount",
+      "openResetPasswordModal",
+      "saveResetPassword",
+      "deleteAccount",
+      "callAccountAdmin"
+    ]
+  );
+
+  const {
     viewInvoice,
     viewPayment
-  } = window.AKY_APP_DETAIL_VIEWERS.initAppDetailViewers({
-    supabaseClient,
-    state,
-    el,
-    getSelectedCustomer,
-    canEditInvoiceRecord,
-    canRequestTbv,
-    openInvoiceModalForEdit,
-    openTbvModal,
-    openModal,
-    closeModal,
-    getPaymentDetailsObject,
-    getChequeStatus,
-    getInvoiceReferenceLabel,
-    getPaymentTypeLabel,
-    getPaymentCollectionReceipt,
-    getAllocationAmount,
-    formatPeso,
-    formatNumber,
-    formatDateTime,
-    escapeHtml
+  } = initOptionalModule(
+    "AKY_APP_DETAIL_VIEWERS",
+    window.AKY_APP_DETAIL_VIEWERS?.initAppDetailViewers,
+    () => ({
+      supabaseClient,
+      state,
+      el,
+      getSelectedCustomer,
+      canEditInvoiceRecord,
+      canRequestTbv,
+      openInvoiceModalForEdit,
+      openTbvModal,
+      openModal,
+      closeModal,
+      getPaymentDetailsObject,
+      getChequeStatus,
+      getInvoiceReferenceLabel,
+      getPaymentTypeLabel,
+      getPaymentCollectionReceipt,
+      getAllocationAmount,
+      formatPeso,
+      formatNumber,
+      formatDateTime,
+      escapeHtml
+    }),
+    ["viewInvoice", "viewPayment"]
+  );
+
+  let bindEvents = bindCoreEvents;
+
+  try {
+    const eventApi = window.AKY_APP_EVENTS?.initAppEvents?.({
+      el,
+      login,
+      openChangePasswordModal,
+      runWithBusyState,
+      saveOwnPassword,
+      closeModal,
+      logout,
+      setView,
+      openAddCustomerModal,
+      renderCustomerList,
+      renderCustomerDiscountFields,
+      addContactRow,
+      saveCustomer,
+      openInvoiceModalForCreate,
+      renderInvoiceDiscountControls,
+      updateInvoiceTotal,
+      addLineItemRow,
+      saveInvoice,
+      openPaymentTypeModal,
+      openPayByInvoiceStep,
+      openPartialPaymentStep,
+      proceedSelectedInvoices,
+      renderPartialBalanceInfo,
+      proceedPartialPayment,
+      renderPaymentMethodFields,
+      renderPaymentReviewBox,
+      renderWithholdingTaxUi,
+      savePayment,
+      renderExecutiveView,
+      renderReportsView,
+      clearReportFilters,
+      downloadReportCsv,
+      printReport,
+      renderPaymentReceivedReportView,
+      clearPaymentReportFilters,
+      downloadPaymentReportCsv,
+      printPaymentReceivedReport,
+      renderTbvRequestsTable,
+      downloadTbvReportCsv,
+      printTbvReport,
+      saveTbvRequest,
+      decideTbv,
+      openSoaModal,
+      renderSoaPaymentRangeVisibility,
+      autofillSoaPaymentRange,
+      generateSoa,
+      openEditCustomerModal,
+      deleteSelectedCustomer,
+      renderAccountsView,
+      refreshAccounts,
+      openCreateAccountModal,
+      saveAccount,
+      saveResetPassword,
+      toggleLogSort
+    });
+
+    if (typeof eventApi?.bindEvents === "function") {
+      bindEvents = eventApi.bindEvents;
+    } else {
+      console.error("[AKY] AKY_APP_EVENTS.bindEvents is unavailable in this build. Falling back to core auth bindings.");
+    }
+  } catch (error) {
+    console.error("[AKY] AKY_APP_EVENTS.initAppEvents failed. Falling back to core auth bindings.", error);
+  }
+
+  window.addEventListener("load", () => {
+    bindEvents();
+    bootstrap();
   });
-  const { bindEvents } = window.AKY_APP_EVENTS.initAppEvents({
-    el,
-    login,
-    openChangePasswordModal,
-    runWithBusyState,
-    saveOwnPassword,
-    closeModal,
-    logout,
-    setView,
-    openAddCustomerModal,
-    renderCustomerList,
-    renderCustomerDiscountFields,
-    addContactRow,
-    saveCustomer,
-    openInvoiceModalForCreate,
-    renderInvoiceDiscountControls,
-    updateInvoiceTotal,
-    addLineItemRow,
-    saveInvoice,
-    openPaymentTypeModal,
-    openPayByInvoiceStep,
-    openPartialPaymentStep,
-    proceedSelectedInvoices,
-    renderPartialBalanceInfo,
-    proceedPartialPayment,
-    renderPaymentMethodFields,
-    renderPaymentReviewBox,
-    renderWithholdingTaxUi,
-    savePayment,
-    renderExecutiveView,
-    renderReportsView,
-    clearReportFilters,
-    downloadReportCsv,
-    printReport,
-    renderPaymentReceivedReportView,
-    clearPaymentReportFilters,
-    downloadPaymentReportCsv,
-    printPaymentReceivedReport,
-    renderTbvRequestsTable,
-    downloadTbvReportCsv,
-    printTbvReport,
-    saveTbvRequest,
-    decideTbv,
-    openSoaModal,
-    renderSoaPaymentRangeVisibility,
-    autofillSoaPaymentRange,
-    generateSoa,
-    openEditCustomerModal,
-    deleteSelectedCustomer,
-    renderAccountsView,
-    refreshAccounts,
-    openCreateAccountModal,
-    saveAccount,
-    saveResetPassword,
-    toggleLogSort
-  });
-window.addEventListener("load", () => {
-  bindEvents();
-  bootstrap();
-});
 
     async function bootstrap() {
     if (!ensureSupabaseClientReady()) return;
@@ -162,8 +271,10 @@ window.addEventListener("load", () => {
         return;
       }
 
-      const profile = await getProfile(data.session.user.id);
+            const profile = await getProfile(data.session.user.id);
       if (!profile) {
+        await supabaseClient.auth.signOut();
+        state.currentProfile = null;
         showLogin();
         el.loginMessage.textContent = "Profile not found for this account.";
         return;
@@ -356,8 +467,11 @@ window.addEventListener("load", () => {
         return;
       }
 
-      const profile = await getProfile(data.user.id);
+            const profile = await getProfile(data.user.id);
       if (!profile) {
+        await supabaseClient.auth.signOut();
+        state.currentProfile = null;
+        showLogin();
         el.loginMessage.textContent = "Profile not found for this account.";
         return;
       }
@@ -369,8 +483,9 @@ window.addEventListener("load", () => {
       if (profile.must_change_password) {
         openChangePasswordModal(true);
       }
-    } catch (error) {
+        } catch (error) {
       console.error(error);
+      showLogin();
       el.loginMessage.textContent = error?.message || getStartupErrorMessage();
     } finally {
       el.loginBtn.dataset.busy = "0";
