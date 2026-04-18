@@ -20,12 +20,12 @@
         let accountTableEventsBound = false;
 
     const ACCOUNT_ADMIN_ACTION_ALIASES = Object.freeze({
-      listAccounts: ["list_accounts", "listaccounts"],
-      createAccount: ["create_account", "createaccount"],
-      updateAccount: ["update_account", "updateaccount"],
-      resetPassword: ["reset_password", "resetpassword"],
-      deleteAccount: ["delete_account", "deleteaccount"]
-    });
+  listAccounts: ["list_users", "list_accounts", "listaccounts"],
+  createAccount: ["create_user", "create_account", "createaccount"],
+  updateAccount: ["update_user", "update_account", "updateaccount"],
+  resetPassword: ["reset_password", "resetpassword"],
+  deleteAccount: ["delete_user", "delete_account", "deleteaccount"]
+});
 
     function toSnakeCase(value) {
       return String(value || "")
@@ -330,12 +330,12 @@
           if (!existingAccount) return alert("Account not found.");
 
           await callAccountAdmin("updateAccount", {
-            id: editingAccountId,
-            username,
-            email,
-            role,
-            must_change_password: mustChangePassword
-          });
+  user_id: editingAccountId,
+  username,
+  email,
+  role,
+  must_change_password: mustChangePassword
+});
 
           await addLog(
             "UPDATE",
@@ -438,10 +438,10 @@
         const mustChangePassword = !!el.resetMustChangePasswordInput?.checked;
 
         await callAccountAdmin("resetPassword", {
-          id: accountId,
-          password,
-          must_change_password: mustChangePassword
-        });
+  user_id: accountId,
+  password,
+  must_change_password: mustChangePassword
+});
 
         await addLog(
           "RESET_PASSWORD",
@@ -488,8 +488,8 @@
         if (!confirmed) return;
 
         await callAccountAdmin("deleteAccount", {
-          id: account.id
-        });
+  user_id: account.id
+});
 
         await addLog(
           "DELETE",
