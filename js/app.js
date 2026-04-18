@@ -1786,13 +1786,15 @@ async function createCustomerDocumentViaServer(payload) {
 async function saveInvoiceDocumentToVault({ customerId, invoiceId, invoiceNumber, notes }) {
   if (!invoiceDocumentState.file) return false;
 
-  const result = await createCustomerDocumentViaServer({
+    const result = await createCustomerDocumentViaServer({
     action: "create_invoice_document",
     customer_id: customerId,
     invoice_id: invoiceId,
     invoice_number: invoiceNumber,
     notes: notes || null,
     source: invoiceDocumentState.source,
+    uploaded_by: state.currentProfile?.id || null,
+    origin_screen: "invoice_modal",
     file_name: invoiceDocumentState.file.name,
     mime_type: invoiceDocumentState.file.type || "image/png",
     file_size: invoiceDocumentState.file.size,
@@ -2388,7 +2390,7 @@ async function saveInvoice() {
 
   const { referenceCode, title } = buildPaymentDocumentMeta(payment, details, method);
 
-  const result = await createCustomerDocumentViaServer({
+    const result = await createCustomerDocumentViaServer({
     action: "create_payment_document",
     customer_id: customer.id,
     payment_id: payment.id,
@@ -2396,6 +2398,8 @@ async function saveInvoice() {
     payment_reference_code: referenceCode,
     payment_title: title,
     source: paymentDocumentState.source,
+    uploaded_by: state.currentProfile?.id || null,
+    origin_screen: "payment_modal",
     file_name: paymentDocumentState.file.name,
     mime_type: paymentDocumentState.file.type || "image/png",
     file_size: paymentDocumentState.file.size,
@@ -3856,12 +3860,13 @@ function formatCompactPeso(value) {
   // ===== End AI Document Assist =====
     // ===== Document Vault =====
   const customerDocumentVault = AKY_CUSTOMER_DOCUMENT_VAULT.initCustomerDocumentVault({
-    supabaseClient,
-    canUploadCustomerDocuments,
-    canDeleteCustomerDocuments,
-    getSelectedCustomer,
-    escapeHtml
-  });
+  supabaseClient,
+  canUploadCustomerDocuments,
+  canDeleteCustomerDocuments,
+  getSelectedCustomer,
+  getCurrentUser,
+  escapeHtml
+});
 
   function syncDocumentVaultCustomer() {
     customerDocumentVault.syncCustomer();
